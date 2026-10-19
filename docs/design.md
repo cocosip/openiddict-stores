@@ -21,7 +21,7 @@
 - 包名 `Sharp.OpenIddict.Stores.*` 与上游 `OpenIddict.EntityFrameworkCore` 处于同一层级、描述同一件事，消费者从包名即可判断用途。
 - 类型前缀为 `OpenIddictStore`（如 `OpenIddictStoreToken`、`OpenIddictStoreBase`），命名空间为 `Sharp.OpenIddict.Stores.*`，与包名三层一致。
 - 旧名 `Sharp.OpenIddict.Dapper.*` / `OpenIddictDapper*` 已废弃。早期按 Dapper 命名，但实测 Dapper 的 API 只出现在一个文件、共 8 处调用；实体映射、谓词翻译、方言 SQL 生成与逐行异步读取全部由本项目自行实现。继续用 Dapper 命名会错误暗示依赖边界。
-- Dapper 目前仍是内部实现细节，**只允许出现在查询执行层内部**；其余代码只依赖 `DbConnection`、`DbCommand`、`DbDataReader` 等 ADO.NET 抽象。是否以及何时移除该依赖，取决于后续方言验收结果，见第 9.3 节。
+- Dapper 已从依赖中完全移除（DB-02 期间实施，见第 9.3 节）。全部代码只依赖 ADO.NET 抽象 `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`，生成的安装包依赖组中不再出现 Dapper。
 
 
 首版（7.x 兼容系列）负责 Application、Authorization、Scope、Token 四类实体的持久化。OpenIddict 8.x 的 Resource、Session 尚无稳定版依赖，暂不纳入实施范围；用户、密码、角色、用户登录界面和 ASP.NET Core Identity 存储不属于此扩展。
@@ -83,7 +83,7 @@
 | `Sharp.OpenIddict.Stores.Oracle` | Oracle 对应实现，包含大文本参数处理 |
 | `Sharp.OpenIddict.Stores.Dm` | 达梦独立方言与参数处理 |
 
-provider 引用核心包，核心包引用 Models、OpenIddict.Core 和 Dapper。产品代码不依赖 EF、ABP、Dapper.Contrib 或另一套 ORM，也不额外发布空的 Abstractions 包。
+provider 引用核心包，核心包只引用 Models 与 OpenIddict.Core。产品代码不依赖 EF、ABP、Dapper（含 Dapper.Contrib）或另一套 ORM，也不额外发布空的 Abstractions 包。
 
 建议目录：
 
@@ -114,7 +114,7 @@ scripts/
 docs/
 ```
 
-使用 .NET 10 SDK、Nullable、集中包版本管理。7.x 按 TFM 管理 Microsoft.Extensions 等依赖，避免给 net8.0 消费者强行引入另一主版本的依赖体系。Dapper 已锁定 2.1.89：它提供 `netstandard2.0`、`net8.0`、`net10.0` 资产，net9.0 宿主解析到 net8.0 资产，这属于正常降级而非缺陷。
+使用 .NET 10 SDK、Nullable、集中包版本管理。7.x 按 TFM 管理 Microsoft.Extensions 等依赖，避免给 net8.0 消费者强行引入另一主版本的依赖体系。
 
 ### 4.1 依赖版本与中央包管理
 
@@ -155,7 +155,7 @@ docs/
 
 - 每个 TFM 选取该 TFM 上仍受支持的**最低版本线**，且不低于上游同 TFM 依赖组的下限；消费者可以自行解析到更高补丁，本扩展不替消费者锁定高主版本。
 - 8.x 主线只有 `net10.0`，其依赖统一使用 10.0.x；该行在 8.x 稳定版发布并实施后生效，当前不适用。- 在中央包管理中按 TFM 条件登记（`Directory.Packages.props` 中用 `Condition="'$(TargetFramework)' == 'net8.0'"` 的 `ItemGroup` 分别声明），不允许改用工程级 `Version`、`VersionOverride` 或运行时程序集绑定绕过。
-- Dapper 等单一版本即可覆盖全部 TFM 的依赖不必拆分；只有存在按代际发布的依赖（Microsoft.Extensions.*、缓存、日志、选项等）才按 TFM 分线。
+- 单一版本即可覆盖全部 TFM 的依赖不必拆分；只有存在按代际发布的依赖（Microsoft.Extensions.*、缓存、日志、选项等）才按 TFM 分线。
 - 打包后检查 nuspec 依赖组：`netstandard2.0`/`netstandard2.1`/`net8.0` 组不得出现 9.x/10.x 的 Microsoft.Extensions.*，`net9.0` 组不得出现 10.x；主线 `net10.0` 组不得出现低代际依赖。7.7.2 基线已实测通过：`Sharp.OpenIddict.Stores` 7.0.0 的 nuspec 五个依赖组分别为 8.0.2 / 8.0.2 / 8.0.2 / 9.0.21 / 10.0.13，OpenIddict 依赖统一为 7.7.2。
 - 只在全局组登记 `Microsoft.Extensions.DependencyInjection` 这类会向下拉取更高代际的包，会把 10.0.x 注入低 TFM 并触发 NU1109 降级错误；因此这类提升必须收进对应 TFM 的条件组，或直接不提升，让上游解析结果保留。
 - 数据库驱动只被测试、示例引用时同样受宿主 TFM 限制：驱动缺少某 TFM 资产（例如 Oracle 驱动只有 `net8.0`/`netstandard2.1`）时，在该 TFM 上不可用，必须在支持矩阵和使用说明中标注，不得用版本提升假装支持。
@@ -205,7 +205,7 @@ provider 包原则上只携带方言、参数适配和 SQL 资源，不强制传
 
 ## 6. 运行架构与接入 API
 
-调用路径为：OpenIddict Server → 原生 Manager → 本扩展 Store → 数据库方言 → Dapper/ADO.NET → 数据库。
+调用路径为：OpenIddict Server → 原生 Manager → 本扩展 Store → 数据库方言 → ADO.NET → 数据库。
 
 `UseDapper()` 注册默认实体和相应的 Store，沿用 `SetDefault*Entity`、`Replace*Store` 等原生扩展点，保留 `DisableAdditionalFiltering = false`，并调用原生 `DisableEntityCaching()` 设置 `OpenIddictCoreOptions.DisableEntityCaching = true`。不替换协议处理器、Manager 或缓存算法。
 
@@ -274,11 +274,11 @@ Revoke 使用数据库批量条件更新，不先加载全部实体。筛选和�
 
 Prune 完整遵循上游条件，而不是简单删除过期行。例如 Token 还要考虑 CreationDate 阈值、inactive/valid 状态和所属 Authorization 状态；Authorization 清理考虑状态、ad-hoc 类型和是否仍有 Token。采用有上限的小批次，建议每批不超过 500 个 ID，避开 Oracle IN 参数限制及其他数据库参数上限。删除时重检清理条件、使用事务，按实际影响行数返回；数据库错误和取消向上传播。
 
-默认列表稳定排序并在数据库分页。返回 IAsyncEnumerable 的实现保持真正逐行读取：在低版本目标可使用 Dapper ExecuteReaderAsync、GetRowParser 与 DbDataReader.ReadAsync；连接/reader 存活到枚举结束，取消和提前退出都必须释放。不能把缓冲 QueryAsync 的完整结果包装成“流式”。驱动内部是否真正异步由真实驱动验证，不用 Task.Run 掩盖同步实现。
+默认列表稳定排序并在数据库分页。返回 IAsyncEnumerable 的实现保持真正逐行读取：直接使用 `DbCommand.ExecuteReaderAsync` 与 `DbDataReader.ReadAsync`；连接/reader 存活到枚举结束，取消和提前退出都必须释放。不能把缓冲查询的完整结果包装成“流式”。驱动内部是否真正异步由真实驱动验证，不用 Task.Run 掩盖同步实现。
 
 ## 9. IQueryable 回调：明确而有限的翻译能力
 
-Dapper 不提供 LINQ provider；OpenIddict 的 CountAsync/GetAsync/ListAsync 却接受 IQueryable 回调。设计必须承认这个差异。
+ADO.NET 不提供 LINQ provider；OpenIddict 的 CountAsync/GetAsync/ListAsync 却接受 IQueryable 回调。设计必须承认这个差异。
 
 比较过三种方式：整表加载后 AsQueryable 会导致内存和延迟失控；全部抛 NotSupportedException 会让常用原生管理接口不可用；引入另一套 ORM 会增加依赖和双重映射。建议实现仅覆盖本存储单表查询的小型翻译器。
 
@@ -329,19 +329,24 @@ Dapper 不提供 LINQ provider；OpenIddict 的 CountAsync/GetAsync/ListAsync �
 
 该组件不是通用 LINQ ORM。采用白名单表达式、列名来自固定映射、值全部参数化；null、排序、分页和投影都有合同测试。额外复杂的报表由应用自己的查询承担。README 必须给出支持与拒绝示例，不能宣称兼容任意 IQueryable。
 
-### 9.3 Dapper 依赖的现状、边界与退出条件
+### 9.3 执行层：直接基于 ADO.NET（已移除 Dapper）
 
-**现状（实测）**：Dapper 的公开 API 在本代码库中只出现 8 处，全部集中在 `OpenIddictStoreSession` 一个类型内部（`ExecuteAsync`、`ExecuteScalarAsync<T>`、`QuerySingleOrDefaultAsync<T>`、`QueryAsync<T>`）。实体映射由 `OpenIddictStoreEntityMapper` 手写完成，谓词翻译由 `OpenIddictStorePredicateTranslator` 完成，SQL 由 `OpenIddictStoreQueryBuilder` 生成，逐行异步读取由 `StreamAsync` 手写 `ReadAsync` 循环完成。换言之，Dapper 目前承担的只是“执行命令并返回标量/行”这一薄层，其约定式映射能力恰好是本项目刻意绕开的部分。
+**现状（实测）**：Dapper 已作为包依赖完全删除。核心包 nuspec 的五个 TFM 依赖组中都不再出现 Dapper，源码中也没有任何 `using Dapper`。执行层改写为本项目自有的 `OpenIddictStoreCommands` 与 `OpenIddictStoreSession`，直接使用 `DbCommand`、`DbParameter`、`DbDataReader` 与 `ExecuteReaderAsync`。实体映射由 `OpenIddictStoreEntityMapper` 手写完成，谓词翻译由 `OpenIddictStorePredicateTranslator` 完成，SQL 由 `OpenIddictStoreQueryBuilder` 生成。
 
-**边界约束**：以下三条是硬约束，由测试固化，违反即视为走查不通过。
+改写前的实测依据：Dapper 的公开 API 只出现 8 处，全部集中在 `OpenIddictStoreSession` 一个类型内部，承担的只是“执行命令并返回标量/行”这一薄层；其约定式映射能力恰好是本项目刻意绕开的部分。因此替换面收敛在一个文件，属于机械替换而非架构调整。
 
-1. `Dapper` 命名空间只允许在查询执行层（`OpenIddictStoreSession`）出现，其他类型不得直接引用 Dapper 任何 API。
-2. 业务代码只依赖 ADO.NET 抽象（`DbConnection`、`DbCommand`、`DbDataReader`、`DbParameter`），不依赖具体驱动类型。
-3. 参数类型适配由方言负责，不得依赖 Dapper 的隐式 `DbType` 推断作为唯一依据。
+**边界约束**：以下四条是硬约束，由测试固化，违反即视为走查不通过。
 
-**为何暂不立即移除**：替换面虽小，但需要重建六个驱动各自的参数类型规则（`DateTime`/`DateTimeOffset`、`bool`、`byte[]`、LOB 与空串语义各不相同），而当前只有 SQLite 一种方言经过真库验证。在方言尚未定型时重写访问栈，等于用未验证的规则去验证未完成的方言，顺序错误。第 5.1 节的驱动矩阵还表明 SqlClient 与达梦在当前 net10 环境无法完成真实连接验收，进一步限制了验证手段。
+1. 任何项目不得引用 Dapper 包，任何源文件不得出现 `using Dapper`、`Dapper.SqlMapper`、`global::Dapper` 或 `new CommandDefinition(`；`Directory.Packages.props` 也不得保留其版本项。
+2. 业务代码只依赖 ADO.NET 抽象（`DbConnection`、`DbCommand`、`DbDataReader`、`DbParameter`），不依赖具体驱动类型。六个受支持驱动的实测结论一致：它们都同时实现 `IDbConnection` 与 `DbConnection`，也都有 `OpenAsync`、`ExecuteReaderAsync`、`ExecuteNonQueryAsync`、`ExecuteScalarAsync`。
+3. 参数类型适配由方言负责。执行层只按值的运行时类型赋值，不依赖驱动的隐式类型推断作为唯一依据。
+4. `netstandard2.0` 下 `DbConnection`、`DbCommand`、`DbDataReader` 不实现 `IAsyncDisposable`，释放一律走 `OpenIddictStoreConnections.DisposeAsync` 的 `#if` 分派，不写 `await using`。
 
-**退出条件（满足后再实施移除）**：DB-02～DB-07 全部完成且各参数规则有真库证据之后，将 `OpenIddictStoreSession` 内部改写为显式 `DbParameter` 赋值。因为调用面已收敛到一个类型，届时是一项机械替换而非架构调整；替换前后必须保持第 9.1 节两张真值表与全部 Store 合同测试通过。
+**为何选择 `DbConnection` 而不是 `IDbConnection`**：`IDbConnection`、`IDbCommand`、`IDataReader` 只有同步 API，`DbConnection` 本身已实现 `IDbConnection`。用 `DbConnection` 既覆盖全部六个驱动，又保留真正的异步执行；而 `IDbConnection` 会强制退回同步调用，与第 9.1 节“不得用 `Task.Run` 掩盖同步实现”的要求冲突。需要按接口访问的调用方仍可隐式转换到 `IDbConnection`，反向则做不到。
+
+**驱动的异步陷阱**：`DbConnection.OpenAsync` 的基类默认实现是同步调用 `Open()`。接口存在不等于真异步，因此“驱动是否真正异步”必须由真库测试确认，不能只看类型。SQL Server 方言的验收测试即为此类证据。
+
+**日期绑定的实测结论（SQL Server）**：同一微秒值以不同 CLR 类型绑定到 `datetime2(6)` 列，回读的刻度不同。`DateTime`（无论 `Kind` 为 Utc 还是 Unspecified）被推断为 `datetime`，截断到 3.33 ms（回读 `…1233330` 刻度）；`DateTimeOffset`（UTC）与 ISO 字符串都精确保留（回读 `…1234560` 刻度），且以 `DateTimeOffset` 参数做等值比较可正确命中。方言因此固定以 UTC `DateTimeOffset` 绑定日期。
 
 
 ## 10. 数据库 SQL 脚本、建库与版本升级
@@ -392,7 +397,7 @@ NuGet 包版本、OpenIddict 版本和数据库架构版本各自管理。架构
 
 安装脚本要求目标前缀下尚未安装；升级脚本先检查精确的源 Series/Version，再改变对象和数据，全部成功后才更新目标版本。错系列、错版本、重复执行或已有部分对象时必须停止并报告，不通过 IF EXISTS 跳过错误结构，也不通过 DROP 后重建假装幂等。架构版本相同不代表任意手改数据库都兼容。
 
-各 provider 的 README 维护执行工具/版本、脚本顺序、权限、批次分隔符、遇错停止方式、schema/prefix 设置、停写要求、备份与失败恢复步骤。SQL Server 的 GO、Oracle 客户端的 `/` 等客户端分隔符不能直接当作 Dapper 命令发给数据库；真实测试和部署必须遵循相同执行约定。恢复按已有对象、数据与版本记录诊断，Oracle/DM 的 DDL 部分提交如实记录；失败后不恢复应用写入，直到人工恢复并重新验证。
+各 provider 的 README 维护执行工具/版本、脚本顺序、权限、批次分隔符、遇错停止方式、schema/prefix 设置、停写要求、备份与失败恢复步骤。SQL Server 的 GO、Oracle 客户端的 `/` 等客户端分隔符不能直接当作 ADO.NET 命令发给数据库；真实测试和部署必须遵循相同执行约定。恢复按已有对象、数据与版本记录诊断，Oracle/DM 的 DDL 部分提交如实记录；失败后不恢复应用写入，直到人工恢复并重新验证。
 
 schema/table-prefix 定制只作用于部署脚本的标识符占位符，按 provider 与运行时相同的校验、引用和约束命名规则生成部署副本。标识符不能用普通值参数代替，也不能直接拼接未经校验的输入。保留原始文件摘要，并记录定制标识符与部署副本摘要；定制不修改仓库中的历史脚本。首版沿用已有部署工具或明确的人工步骤，不为此新增通用模板/迁移框架。
 
@@ -482,7 +487,7 @@ OpenIddict 8.x 主线等上游稳定版发布后再单独立项，本节不为�
 | `UseConnectionFactory<TFactory>()` | 注册实现 IOpenIddictStoreConnectionFactory 的连接工厂 |
 | `SetSchema(string?)` | 设置独立 schema；SQLite/MySQL 不支持的 schema 语义须拒绝，不能静默忽略 |
 | `SetTablePrefix(string)` | 默认 OpenIddict；应用于主表、辅助表及架构版本表，长度和合法性由 provider 校验 |
-| `SetCommandTimeout(int?)` | 默认 null，遵循驱动/Dapper 的默认值；显式值必须为正秒数 |
+| `SetCommandTimeout(int?)` | 默认 null，遵循驱动的默认值；显式值必须为正秒数 |
 
 连接工厂的最小合同为 `ValueTask<DbConnection> CreateConnectionAsync(CancellationToken cancellationToken)`。返回的连接尚未打开且由调用方拥有，不能返回应用其他代码正在使用的共享连接。
 

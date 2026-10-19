@@ -6,7 +6,7 @@
 
 ## 1. 当前进度
 
-截至 2026-10-19，已完成源码调研、正式设计编写及走查问题修订，已提交的设计基线为 `982c156`（v1.2）；此后补齐精确比较、查询 NULL 语义、任务依赖、逐数据库 SQL 脚本的交付、版本与持续维护验收，依赖中央包管理与逐 TFM 版本分线规则，并将实施基线改为唯一稳定版 OpenIddict 7.7.2（不再依赖任何预览包），任务清单相应收敛为四类实体、四类 Store 和单系列多目标验证，设计收敛为 v1.9。代码与测试已整体纳入版本控制（E-025），工作区不再积压未跟踪文件。当前共 50 项任务，24 项完成（3 项文档、BASE-01 依赖锁定、BASE-02 合同清单、ENG-01 工程布局、ENG-02 四类模型、COMPAT-01 五目标工程、STORE-01 SQLite 方言与安装脚本、STORE-03 Application/Scope Store、STORE-04 Authorization/Token Store、STORE-05 集合索引、STORE-06 CAS 与原子回滚、LIFE-03 批量撤销、LIFE-04 独立清理、LIFE-01/02 关联删除与竞态、QUERY-01～03 查询翻译、STORE-02 访问器收尾、COMPAT-02～04 包资产与兼容性），26 项实现与验证任务未完成（ENG-03、STORE-02 部分完成）。设计文档状态仍为“设计评审稿”，完成编写不代表用户已经确认设计。
+截至 2026-10-19，已完成源码调研、正式设计编写及走查问题修订，已提交的设计基线为 `982c156`（v1.2）；此后补齐精确比较、查询 NULL 语义、任务依赖、逐数据库 SQL 脚本的交付、版本与持续维护验收，依赖中央包管理与逐 TFM 版本分线规则，并将实施基线改为唯一稳定版 OpenIddict 7.7.2（不再依赖任何预览包），任务清单相应收敛为四类实体、四类 Store 和单系列多目标验证，设计收敛为 v1.9。代码与测试已整体纳入版本控制（E-025），工作区不再积压未跟踪文件。当前共 50 项任务，25 项完成（3 项文档、BASE-01 依赖锁定、BASE-02 合同清单、ENG-01 工程布局、ENG-02 四类模型、COMPAT-01 五目标工程、STORE-01 SQLite 方言与安装脚本、STORE-03 Application/Scope Store、STORE-04 Authorization/Token Store、STORE-05 集合索引、STORE-06 CAS 与原子回滚、LIFE-03 批量撤销、LIFE-04 独立清理、LIFE-01/02 关联删除与竞态、QUERY-01～03 查询翻译、STORE-02 访问器收尾、COMPAT-02～04 包资产与兼容性、DB-02 SQL Server 方言与真库验收），25 项实现与验证任务未完成（ENG-03、STORE-02 部分完成）。设计文档状态仍为“设计评审稿”，完成编写不代表用户已经确认设计。
 
 当前仓库已有 `.slnx`、`global.json`、集中构建与包管理文件、8 个产品工程、3 个测试工程和 2 个示例骨架，可还原、构建、打包并通过 254 项测试（43 项单元：工程约束、Store 合同冻结、模型列映射、注册与选项校验、JSON/UTC 转换；211 项集成：SQLite 安装脚本真库执行、六 provider 脚本资产检查、四类 Store 真库合同、集合索引与 CAS 合同、批量撤销与清理合同、关联删除矩阵与竞态、查询回调翻译、访问器与无截断、包资产与低 TFM 加载、原生 Manager 端到端）。核心包已具备 Builder/选项/连接工厂/默认实体注册、转换器与四类 Store，四类 Store 已全部注册进 DI，并已验证可经原生 Manager（含非泛型接口）创建、查找与更新；Store 的读写、删除、撤销、清理与 IQueryable 查询回调均已可用；SQLite 有可执行的 v0001 安装脚本并通过完整真库验收。其余五种方言尚未实现，协议联调按约束暂不实施。以下未完成项均为计划，不代表已有可调用功能。
 
@@ -144,7 +144,7 @@ JSON 是集合权威数据；四张辅助表同事务维护，摘要仅筛选候
 前置：P3/P4 的共享合同基线；Oracle/DM 还依赖 BASE-03/04。对应设计第 5、10、11、15～18 节。各任务的产物是对应 provider 方言、参数适配、安装 SQL、fixture 与运行记录。安装 SQL 同时交付设计第 10 节规定的清单、摘要和执行说明，填入第 5.1 节对应状态；MIG-03/04 是各库脚本的最终维护/升级联验，不作为 P5 的反向前置。
 
 - [ ] **DB-01 SQLite 3.35+ 完整验收。** 验收：临时文件上通过第 5 节完整合同，验证实际 SQLite 版本、外键、UTC 格式、读写锁/并发限制与分页；单元模拟不替代文件数据库运行。
-- [ ] **DB-02 SQL Server 2016+ 实现与验收。** 验收：Microsoft.Data.SqlClient 实测；覆盖可空过滤唯一索引、尾随空格、Unicode、datetime2(6)、摘要索引、分页和关联写入锁；不以新版专属 SQL 实现所声明的最低版本。
+- [x] **DB-02 SQL Server 2016+ 实现与验收。** 验收：Microsoft.Data.SqlClient 实测；覆盖可空过滤唯一索引、尾随空格、Unicode、datetime2(6)、摘要索引、分页和关联写入锁；不以新版专属 SQL 实现所声明的最低版本。
 - [ ] **DB-03 PostgreSQL 14+ 实现与验收。** 验收：Npgsql 实测；覆盖标识符/schema、bytea 摘要、timestamp(6) UTC 转换、分页和事务/锁；驱动参数适配不污染其他 provider。
 - [ ] **DB-04 MySQL 8.0+ 实现与验收。** 验收：MySqlConnector 实测；覆盖 utf8mb4、排序/尾空格、有界索引总键长、longtext、datetime(6)、影响行数和锁；记录实际服务器配置。
 - [ ] **DB-05 MariaDB 10.6+ 独立验收。** 验收：同一 MySql provider 在 MariaDB 单独通过全部合同和版本化 SQL，差异限制有明确处理；不得复用 MySQL 的通过结论。
@@ -206,7 +206,7 @@ JSON 是集合权威数据；四张辅助表同事务维护，摘要仅筛选候
 
 | 服务器/模式 | Provider | 实现与完整合同 | 驱动/TFM 支持 | 证据编号 |
 | --- | --- | --- | --- | --- |
-| SQL Server 2016+ | SqlServer | 未开始 | 待实测 | — |
+| SQL Server 2016+ | SqlServer | 部分通过（15 项真库合同，见 E-026） | 已实测：SqlClient 7.1.1 经 runtimes/win/lib/net9.0 在 net10 宿主加载 | E-026 |
 | PostgreSQL 14+ | PostgreSql | 未开始 | 待实测 | — |
 | MySQL 8.0+ | MySql | 未开始 | 待实测 | — |
 | MariaDB 10.6+ | MySql | 未开始 | 待实测 | — |
@@ -234,7 +234,7 @@ JSON 是集合权威数据；四张辅助表同事务维护，摘要仅筛选候
 
 | 服务器/模式 | 安装/增量 | 跨系列升级 | 清单/包/执行说明 | 证据编号 |
 | --- | --- | --- | --- | --- |
-| SQL Server 2016+ | 未开始 | 不适用 | 未开始 | — |
+| SQL Server 2016+ | 通过（E-026） | 不适用：首版无前序架构 | 通过（E-026） | E-026 |
 | PostgreSQL 14+ | 未开始 | 不适用 | 未开始 | — |
 | MySQL 8.0+ | 未开始 | 不适用 | 未开始 | — |
 | MariaDB 10.6+ | 未开始 | 不适用 | 未开始 | — |
@@ -600,6 +600,19 @@ dotnet pack Sharp.OpenIddict.Stores.slnx --configuration Release --no-build --ou
 - 验证命令与结果（提交前重跑）：`dotnet build Sharp.OpenIddict.Stores.slnx -c Release` 0 警告 0 错误；`dotnet test Sharp.OpenIddict.Stores.slnx -c Release --no-build` 通过 254 项（43 单元 + 211 集成，0 跳过）；`artifacts/` 内 8 个 `7.0.0` 包与 COMPAT-02 记录一致；`git status --short` 只剩本次提交内容，`bin/`、`obj/`、`artifacts/` 均被 `.gitignore` 排除（已用 `git check-ignore -v` 逐项确认，未误提交构建产物）。
 - 结果与缺口：这一提交固化的是“24/50 项完成”的已验证基线，不代表任何新功能；DB-02～DB-07 等未完成项状态不变。归档类记录（E-005～E-024）中写的“本次未提交的工作区”保留原文，不追改历史。
 
+### E-026：SQL Server 方言、安装脚本与执行层去 Dapper
+
+- 任务：DB-02（SQL Server 方言与真库验收）、ENG-03（执行层改造）；系列：7.7.2。
+- 日期：2026-10-19；实现提交：`0604d4b`（执行层去 Dapper）、`49d6933`（SQL Server provider 与验收）。
+- 产物：`src/Sharp.OpenIddict.Stores.SqlServer/`（`OpenIddictStoreSqlServerDialect.cs`、`OpenIddictStoreSqlServerBuilderExtensions.cs`、`Sql/7/install/v0001.sql`、`Sql/manifest.json`、`Sql/README.md`）；`src/Sharp.OpenIddict.Stores/OpenIddictStoreCommands.cs`（新增 ADO.NET 执行层）；`tests/Sharp.OpenIddict.Stores.IntegrationTests/SqlServerStoreContractTests.cs`（15 项）、`ServerFactAttribute.cs`；`OpenIddictStoreCoreBuilderExtensions.cs` 新增 `UseStores()` 并把 `UseDapper()` 降级为 `[Obsolete]` 别名。
+- 原因一（执行层）：核心包 nuspec 的五个 TFM 依赖组都带着 `Dapper 2.1.89`，消费者安装即被强制拉入该依赖，与包名 `Stores` 的定位不符。实测该依赖只出现在 `OpenIddictStoreSession` 一个类型的 8 处调用，替换面收敛，因此改为直接使用 `DbCommand`/`DbParameter`/`DbDataReader`，并删除 `Directory.Packages.props` 中的版本项。
+- 原因二（方言）：SQL Server 的精确比较、可空唯一键、分页语法与日期精度都不能照抄 SQLite 实现。
+- 驱动抽象选型（实测六驱动）：`Microsoft.Data.Sqlite`、`Microsoft.Data.SqlClient`、`Npgsql`、`MySqlConnector`、`Oracle.ManagedDataAccess.Core`、`DM.DmProvider` 全部同时实现 `IDbConnection` 与 `DbConnection`，且都有 `OpenAsync`/`ExecuteReaderAsync`/`ExecuteNonQueryAsync`/`ExecuteScalarAsync`。选 `DbConnection`/`DbCommand`/`DbParameter`/`DbDataReader`：`IDbConnection`/`IDbCommand` 只有同步 API，会与“不得用 `Task.Run` 掩盖同步实现”冲突；`DbConnection` 本身即实现 `IDbConnection`，按接口访问的调用方仍可隐式转换。
+- 真库证据（LocalDB，SQL Server 2025 17.0.4025.3，SqlClient 7.1.1，net10 宿主经 `runtimes/win/lib/net9.0` 加载）：15 项全部通过，覆盖随包脚本真实执行（9 张表、3 个过滤唯一索引、版本行）、重复安装被拒绝而非跳过、`nvarchar(max)` 长值与 Unicode、四集合索引与 JSON 权威复核、`datetime2(6)` 微秒往返、精确比较拒绝大小写/重音/尾随空格变体、唯一键拒绝重复且允许任意多个 NULL、CAS 旧快照抛原生 `ConcurrencyException`、`OFFSET/FETCH` 分页与仅 OFFSET、COUNT 不产生派生表 ORDER BY、关联删除（仅经 Authorization 可达的 Token）、批量撤销把 NULL 状态按“未撤销”处理、Prune 前后边界。
+- 关键实测结论：`BIN2` 单用仍把 `client` 与 `client ` 视为相等，必须同时比较 `DATALENGTH`；`FETCH NEXT 0 ROWS` 是语法错误，方言选择抛 `ArgumentOutOfRangeException` 而非静默返回；`COUNT(*) FROM (… ORDER BY …)` 在 SQL Server 上直接报错，`CountQueryAsync` 因此传入 `forCount: true` 丢弃无分页的 ORDER BY；以 `DateTime` 绑定 `datetime2(6)` 会被推断为 `datetime` 并截断到 3.33 ms（回读 `…1233330` 刻度），改用 UTC `DateTimeOffset` 后精确保留（`…1234560`）。
+- 验证命令与结果：`dotnet build Sharp.OpenIddict.Stores.slnx -c Release` 0 警告 0 错误；`dotnet test Sharp.OpenIddict.Stores.slnx -c Release --no-build` 通过 271 项（45 单元 + 226 集成）；未设置 `DSH_SQLSERVER` 时该套件 15 项显式跳过、其余集成仍通过，设置后 0 跳过；`dotnet pack -o artifacts` 后核心包 nuspec 五个 TFM 依赖组已无 `Dapper`。
+- 结果与缺口：DB-02 按 §5 记为“部分通过”——15 项已覆盖验收清单中的唯一索引、尾随空格、Unicode、`datetime2(6)`、摘要索引、分页与关联删除，但完整合同（全部 Store 成员对 SQL Server 的逐项运行）尚未铺开，因此 §5 主表不填“通过”。未验证最低版本 SQL Server 2016，实测环境为 2025；`SqlClient` 无 `net10.0` 资产，走 `net9.0` 资产属正常降级。`UseDapper()` 保留为 `[Obsolete]` 别名并新增测试固定其与 `UseStores()` 行为一致，避免别名退化为空实现；本仓库内部调用点已全部改用 `UseStores()`。
+
 后续任务完成时复制以下模板并填写，再勾选任务；同一任务有多个系列或环境时分别列明，不覆盖过去的失败/修复记录。
 ```text
 ### E-012：Application Store 与集合索引
@@ -641,7 +654,7 @@ dotnet pack Sharp.OpenIddict.Stores.slnx --configuration Release --no-build --ou
 
 ### 9.1 当前状态快照
 
-- 已完成 **24 / 50** 项。P0 文档基线、P3 SQLite 基础读写（6/6）、P4 的查询与生命周期（QUERY-01～03、LIFE-01～04）、P6 多目标与包资产（4/4）全部完成。基线已整体提交并纳入版本控制（E-025）。
+- 已完成 **25 / 50** 项。P0 文档基线、P3 SQLite 基础读写（6/6）、P4 的查询与生命周期（QUERY-01～03、LIFE-01～04）、P6 多目标与包资产（4/4）全部完成。基线已整体提交并纳入版本控制（E-025）。
 - 验证基线：`dotnet build Sharp.OpenIddict.Stores.slnx -c Release` 0 警告 0 错误；`dotnet pack -o artifacts` 产出 8 个包；`dotnet test` 通过 **254 项（43 单元 + 211 集成）**。任何改动的底线是不低于这组数字。
 - 已具备的能力：四类 Store 的全部 145 个成员、集合索引（JSON 权威 + SHA-256 候选 + Ordinal 复核）、Update CAS、七种批量撤销、Prune 清理、关联删除矩阵、IQueryable 回调翻译、逐行异步读取、五 TFM 与分 TFM 依赖组、八个包资产。
 - SQLite 是唯一完成真库验收的 provider，其余五种方言尚无实现。
