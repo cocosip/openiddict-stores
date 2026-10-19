@@ -616,14 +616,14 @@ dotnet pack Sharp.OpenIddict.Stores.slnx --configuration Release --no-build --ou
 ### E-027：移除 global.json，SQL 脚本改为可配置前缀/schema 的模板
 
 - 任务：BASE-01（SDK 要求）、MIG-01/MIG-03（脚本交付形态）、STORE-01/DB-02（安装验证）；系列：7.7.2。
-- 日期：2026-10-19；实现：本次未提交的工作区。
+- 日期：2026-10-19；实现提交：`37bf3a3`。
 - 起因：用户提出两个问题——(1) `global.json` 固定 SDK 补丁版本，换机器就可能因版本对不上而无法构建；(2) 表前缀是运行时可配置的，而仓库脚本把 `__PREFIX__Applications` 这类占位写法当成了可执行 SQL，装到库里根本不是合法表名。
 - 变更一（SDK）：删除 `global.json`。工程以 `net10.0` 目标框架本身作为 SDK 下限，不再绑定补丁号。验证：删除后 `dotnet --version` 为本机 10.0.401（原文件要求 10.0.402，本机并未安装），`dotnet build Sharp.OpenIddict.Stores.slnx -c Release` 0 警告 0 错误。
 - 变更二（脚本）：`v0001.sql` → `v0001.sql.template`（SQLite、SQL Server 两套，`git mv` 保留历史）；新增 `OpenIddictStoreIdentifiers.RenderDeploymentScript(template, dialect, prefix, schema)`，按运行时同一套 `Validate`+`QuoteIdentifier` 规则把 `__PREFIX__`/`__SCHEMA__` 展开为真实标识符，非法前缀/schema 在生成副本之前抛出。SQL Server 模板的全部表名、外键引用、`OBJECT_ID` 检查均加 schema 限定；SQLite 无 schema，仅用前缀占位符。
 - 清单：`manifest.json` 增加 `rendersTokens`，声明该文件包含哪些占位符，并由 `SqlAssetTests.Manifest_DeclaresTheTokensEachTemplateRenders` 与文件实际占位符（忽略注释行）逐项比对；`ShippedScripts_AreTemplatesNotRunnableSql` 断言 `Sql/` 下不再有 `.sql` 文件。
 - 测试改造：新增 `DeploymentScript` 帮助类统一渲染（11 个测试类原先各自复制 `ApplyPrefix` + 路径拼接）；同时合并 10 份重复的 `SqliteConnectionFactory` 到单个文件。
 - 真库证据一（SQLite，Microsoft.Data.Sqlite 10.0.13，net10 宿主）：渲染后执行，九张表、`Series=7/Version=1`、外键、唯一键、尾随空格唯一性、索引、重复安装被拒全部通过；新增 `CustomPrefix_InstallsAndIsUsable` 用前缀 `Oidc` 渲染安装，断言表名变为 `OidcApplications`/`OidcSchemaVersions`、默认前缀的 `OpenIddictApplications` 不存在，并用同一前缀的 Store 真实写入与按 ClientId 查回。
-- 真库证据二（SQL Server 2025 LocalDB 17.0.4025.3，SqlClient 7.1.1）：默认前缀 15 项保持通过；新增 `CustomPrefixAndSchema_InstallAndAreUsable` 在独立数据库上用前缀 `Oidc` + schema `auth` 渲染安装，断言 `auth` 下 9 张表、`dbo` 下 0 张 `Oidc*` 表、`auth.OidcSchemaVersions` 版本行为 1，并用以 `TablePrefix=Oidc`/`Schema=auth` 配置的 Store 写入与查回。该套件 16 项全部通过、0 跳过。
+- 真库证据二（SQL Server 2025 LocalDB 17.0.4025.3，SqlClient 7.1.1）：默认前缀 15 项保持通过；新增 `CustomPrefixAndSchema_InstallAndAreUsable` 在**同一个数据库的另一个 schema** 上用前缀 `Oidc` + schema `auth` 渲染安装——同库同前缀会让泄漏立刻暴露——断言 `auth` 下 9 张表、非 `dbo` schema 下没有任何 `OpenIddict*` 表、`auth.OidcSchemaVersions` 版本行为 1，并用以 `TablePrefix=Oidc`/`Schema=auth` 配置的 Store 写入与查回；再跑一次渲染副本被 schema 限定的 `OBJECT_ID` 守卫拒绝。该套件 16 项全部通过、0 跳过。
 - 走查中发现并修正的问题：
   - SQLite 模板首行注释同时提到两个占位符，导致“清单声明”与“文件实际占位符”断言不一致。修正方式是让比对忽略整行注释（注释是说明，不是部署需要填充的位置），而不是改注释迁就测试。
   - `Record.ExceptionAsync(ExecuteInstallScriptAsync)` 在方法签名增加可选参数后无法继续按方法组使用，改为显式 lambda。
