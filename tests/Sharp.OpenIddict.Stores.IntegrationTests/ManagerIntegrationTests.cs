@@ -18,7 +18,7 @@ using Xunit;
 namespace Sharp.OpenIddict.Stores.IntegrationTests;
 
 /// <summary>
-/// End-to-end registration verification: from <c>UseDapper</c> to reading an Application through the native
+/// End-to-end registration verification: from <c>UseStores</c> to reading an Application through the native
 /// Manager, proving the Store is really wired into the OpenIddict DI pipeline (design 6).
 /// </summary>
 public sealed class ManagerIntegrationTests : IAsyncLifetime
@@ -62,7 +62,7 @@ public sealed class ManagerIntegrationTests : IAsyncLifetime
         var services = new ServiceCollection();
 
         services.AddLogging();
-        services.AddOpenIddict().AddCore(options => options.UseDapper(dapper => dapper
+        services.AddOpenIddict().AddCore(options => options.UseStores(stores => stores
             .UseSqlite()
             .UseConnectionFactory(_ => new SqliteConnection(_connectionString))));
 

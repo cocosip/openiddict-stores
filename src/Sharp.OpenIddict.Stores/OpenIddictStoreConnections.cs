@@ -75,6 +75,17 @@ internal static class OpenIddictStoreConnections
 #endif
     }
 
+    /// <summary>Disposes the command; netstandard2.0 has no DisposeAsync, so it falls back to synchronous disposal.</summary>
+    public static ValueTask DisposeAsync(DbCommand command)
+    {
+#if NETSTANDARD2_0
+        command.Dispose();
+        return default;
+#else
+        return command.DisposeAsync();
+#endif
+    }
+
     /// <summary>Begins a transaction; netstandard2.0 has no BeginTransactionAsync, so it falls back to synchronous begin.</summary>
     public static Task<DbTransaction> BeginTransactionAsync(DbConnection connection, CancellationToken cancellationToken)
     {

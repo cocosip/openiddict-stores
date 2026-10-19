@@ -6,13 +6,12 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Dapper;
 
 namespace Sharp.OpenIddict.Stores;
 
 /// <summary>
-/// The connection context used by a single store operation: acquires, opens, and disposes the connection, and centralizes Dapper execution details.
-/// A new instance is used per operation; connections are never reused across asynchronous enumerations.
+/// The connection context used by a single store operation: acquires, opens, and disposes the connection, and centralizes
+/// ADO.NET command execution. A new instance is used per operation; connections are never reused across asynchronous enumerations.
 /// </summary>
 internal sealed class OpenIddictStoreSession : IAsyncDisposable
 {
@@ -51,47 +50,34 @@ internal sealed class OpenIddictStoreSession : IAsyncDisposable
 
     /// <summary>Executes a non-query command and returns the number of affected rows.</summary>
     public Task<int> ExecuteAsync(string sql, object? parameters, CancellationToken cancellationToken)
-        => _connection.ExecuteAsync(new CommandDefinition(
-            sql, parameters, commandTimeout: CommandTimeout, cancellationToken: cancellationToken));
+        => OpenIddictStoreCommands.ExecuteAsync(_connection, sql, parameters, CommandTimeout, null, cancellationToken);
 
     /// <summary>Executes a scalar query.</summary>
-    public async Task<T?> ExecuteScalarAsync<T>(string sql, object? parameters, CancellationToken cancellationToken)
-        => await _connection.ExecuteScalarAsync<T>(new CommandDefinition(
-            sql, parameters, commandTimeout: CommandTimeout, cancellationToken: cancellationToken))
-            .ConfigureAwait(false);
+    public Task<T?> ExecuteScalarAsync<T>(string sql, object? parameters, CancellationToken cancellationToken)
+        => OpenIddictStoreCommands.ExecuteScalarAsync<T>(_connection, sql, parameters, CommandTimeout, null, cancellationToken);
 
-    /// <summary>Queries a single row; returns default when there is no result.</summary>
-    public Task<T?> QuerySingleOrDefaultAsync<T>(string sql, object? parameters, CancellationToken cancellationToken)
-        => QueryCoreAsync<T>(sql, parameters, cancellationToken);
-
-    /// <summary>Queries a single row; returns null when there is no result.</summary>
-    public Task<T?> FindAsync<T>(string sql, object? parameters, CancellationToken cancellationToken)
-        where T : class
-        => QueryCoreAsync<T>(sql, parameters, cancellationToken);
-
-    private async Task<T?> QueryCoreAsync<T>(string sql, object? parameters, CancellationToken cancellationToken)
-        => await _connection.QuerySingleOrDefaultAsync<T>(new CommandDefinition(
-            sql, parameters, commandTimeout: CommandTimeout, cancellationToken: cancellationToken))
-            .ConfigureAwait(false);
-
-    /// <summary>Queries multiple rows.</summary>
-    public async Task<IReadOnlyList<T>> QueryAsync<T>(string sql, object? parameters, CancellationToken cancellationToken)
+    /// <summary>
+    /// Reads a single row through <paramref name="map"/>; returns default when the query yields nothing.
+    /// The mapper owns materialization, so no ORM convention decides the shape.
+    /// </summary>
+    public async Task<T?> QuerySingleOrDefaultAsync<T>(
+        string sql,
+        object? parameters,
+        Func<DbDataReader, T> map,
+        CancellationToken cancellationToken)
     {
-        var rows = await _connection.QueryAsync<T>(new CommandDefinition(
-            sql, parameters, commandTimeout: CommandTimeout, cancellationToken: cancellationToken))
+        var reader = await OpenIddictStoreCommands
+            .ExecuteReaderAsync(_connection, sql, parameters, CommandTimeout, null, cancellationToken)
             .ConfigureAwait(false);
 
-        return rows.AsList();
-    }
-
-    /// <summary>Queries a list of scalars (for example, a set of identifiers).</summary>
-    public async Task<IReadOnlyList<T>> QueryScalarsAsync<T>(string sql, object? parameters, CancellationToken cancellationToken)
-    {
-        var rows = await _connection.QueryAsync<T>(new CommandDefinition(
-            sql, parameters, commandTimeout: CommandTimeout, cancellationToken: cancellationToken))
-            .ConfigureAwait(false);
-
-        return rows.AsList();
+        try
+        {
+            return await reader.ReadAsync(cancellationToken).ConfigureAwait(false) ? map(reader) : default;
+        }
+        finally
+        {
+            await OpenIddictStoreConnections.DisposeAsync(reader).ConfigureAwait(false);
+        }
     }
 
     /// <summary>True row-by-row asynchronous enumeration: the reader lives until enumeration ends and is disposed on early exit or cancellation.</summary>
@@ -101,10 +87,9 @@ internal sealed class OpenIddictStoreSession : IAsyncDisposable
         Func<DbDataReader, T> map,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var command = new CommandDefinition(
-            sql, parameters, commandTimeout: CommandTimeout, cancellationToken: cancellationToken);
-
-        var reader = await _connection.ExecuteReaderAsync(command).ConfigureAwait(false);
+        var reader = await OpenIddictStoreCommands
+            .ExecuteReaderAsync(_connection, sql, parameters, CommandTimeout, null, cancellationToken)
+            .ConfigureAwait(false);
 
         try
         {
@@ -126,25 +111,34 @@ internal sealed class OpenIddictStoreSession : IAsyncDisposable
     /// <summary>Executes a non-query command within the given transaction.</summary>
     public Task<int> ExecuteAsync(
         string sql, object? parameters, DbTransaction transaction, CancellationToken cancellationToken)
-        => _connection.ExecuteAsync(new CommandDefinition(
-            sql, parameters, transaction, CommandTimeout, cancellationToken: cancellationToken));
+        => OpenIddictStoreCommands.ExecuteAsync(_connection, sql, parameters, CommandTimeout, transaction, cancellationToken);
 
     /// <summary>Executes a scalar query within the given transaction.</summary>
-    public async Task<T?> ExecuteScalarAsync<T>(
+    public Task<T?> ExecuteScalarAsync<T>(
         string sql, object? parameters, DbTransaction transaction, CancellationToken cancellationToken)
-        => await _connection.ExecuteScalarAsync<T>(new CommandDefinition(
-            sql, parameters, transaction, CommandTimeout, cancellationToken: cancellationToken))
-            .ConfigureAwait(false);
+        => OpenIddictStoreCommands.ExecuteScalarAsync<T>(
+            _connection, sql, parameters, CommandTimeout, transaction, cancellationToken);
 
-    /// <summary>Queries multiple rows within the given transaction.</summary>
-    public async Task<IReadOnlyList<T>> QueryAsync<T>(
-        string sql, object? parameters, DbTransaction transaction, CancellationToken cancellationToken)
+    /// <summary>Reads a single row within the given transaction; returns default when the query yields nothing.</summary>
+    public async Task<T?> QuerySingleOrDefaultAsync<T>(
+        string sql,
+        object? parameters,
+        DbTransaction transaction,
+        Func<DbDataReader, T> map,
+        CancellationToken cancellationToken)
     {
-        var rows = await _connection.QueryAsync<T>(new CommandDefinition(
-            sql, parameters, transaction, CommandTimeout, cancellationToken: cancellationToken))
+        var reader = await OpenIddictStoreCommands
+            .ExecuteReaderAsync(_connection, sql, parameters, CommandTimeout, transaction, cancellationToken)
             .ConfigureAwait(false);
 
-        return rows.AsList();
+        try
+        {
+            return await reader.ReadAsync(cancellationToken).ConfigureAwait(false) ? map(reader) : default;
+        }
+        finally
+        {
+            await OpenIddictStoreConnections.DisposeAsync(reader).ConfigureAwait(false);
+        }
     }
 
     /// <summary>Computes the SHA-256 digest of a collection value (32 bytes). The digest only narrows candidates; it does not define identity.</summary>

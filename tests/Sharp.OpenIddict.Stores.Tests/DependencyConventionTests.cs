@@ -142,17 +142,31 @@ public sealed class DependencyConventionTests
         return directory?.FullName
             ?? throw new InvalidOperationException("Could not locate the repository root (Sharp.OpenIddict.Stores.slnx).");
     }
-/// <summary>
-    /// Design 9.3: Dapper is an internal execution detail confined to the session type. Keeping the reference
-    /// surface this small is what makes the dependency removable later as a mechanical change.
+    /// <summary>
+    /// Design 9.3: the stores run directly on ADO.NET. Dapper was removed as a package dependency, so this
+    /// checks both halves of that claim: no project references the package, and no source file imports it.
     /// </summary>
     [Fact]
-    public void DapperIsConfinedToTheQueryExecutionLayer()
+    public void Dapper_IsNotReferencedOrImported()
     {
         var offenders = new List<string>();
-        var root = Path.Combine(RepositoryRoot, "src");
 
-        foreach (var file in Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories))
+        foreach (var project in EnumerateProjectFiles())
+        {
+            var document = XDocument.Load(project);
+
+            foreach (var reference in document.Descendants("PackageReference"))
+            {
+                var id = reference.Attribute("Include")?.Value;
+
+                if (string.Equals(id, "Dapper", StringComparison.OrdinalIgnoreCase))
+                {
+                    offenders.Add($"{Relative(project)} references the Dapper package");
+                }
+            }
+        }
+
+        foreach (var file in Directory.GetFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories))
         {
             if (file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
                 || file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
@@ -160,36 +174,41 @@ public sealed class DependencyConventionTests
                 continue;
             }
 
-            // The session is the one allowed place: it owns the command execution wrapper.
-            if (Path.GetFileName(file).Equals("OpenIddictStoreSession.cs", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
             var text = File.ReadAllText(file);
 
-            // Direct dependence on Dapper means importing its namespace, naming its types, or building its
-            // command options. Calling our own session wrapper (which happens to share method names) is the
-            // intended path and must not be flagged.
-            // The check runs on line starts because "using Dapper;" also appears as a substring of a
-            // longer namespace import, and only a real import or a qualified type name is a violation.
-            var importsDapper = text
+            // Only a real namespace import or a qualified type name counts: prose that mentions the
+            // historical dependency must not be flagged.
+            var imports = text
                 .Split('\n')
                 .Select(line => line.Trim())
                 .Any(line => line.Equals("using Dapper;", StringComparison.Ordinal)
                              || line.StartsWith("using Dapper.", StringComparison.Ordinal)
                              || line.StartsWith("global using Dapper", StringComparison.Ordinal));
 
-            if (importsDapper
+            if (imports
                 || text.Contains("Dapper.SqlMapper", StringComparison.Ordinal)
                 || text.Contains("global::Dapper", StringComparison.Ordinal)
                 || text.Contains("new CommandDefinition(", StringComparison.Ordinal))
             {
-                offenders.Add(Relative(file));
+                offenders.Add($"{Relative(file)} still imports Dapper");
             }
         }
 
         Assert.True(offenders.Count == 0,
-            "Dapper must stay confined to OpenIddictStoreSession (design 9.3):" + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+            "Dapper must not be referenced or imported (design 9.3):" +
+            Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    /// <summary>
+    /// The central manifest must not keep a pinned version for a package nothing references: it would
+    /// advertise a dependency the product no longer has.
+    /// </summary>
+    [Fact]
+    public void CentralManifest_DoesNotPinDapper()
+    {
+        var props = XDocument.Load(Path.Combine(RepositoryRoot, "Directory.Packages.props"));
+
+        Assert.DoesNotContain(props.Descendants("PackageVersion"),
+            element => string.Equals(element.Attribute("Include")?.Value, "Dapper", StringComparison.OrdinalIgnoreCase));
     }
 }

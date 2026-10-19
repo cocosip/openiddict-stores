@@ -11,16 +11,16 @@ using Sharp.OpenIddict.Stores.Stores;
 namespace Microsoft.Extensions.DependencyInjection;
 
 /// <summary>
-/// Registers the Dapper store extension on OpenIddict Core.
+/// Registers the store extension on OpenIddict Core.
 /// </summary>
 public static class OpenIddictStoreCoreBuilderExtensions
 {
     /// <summary>Registers this extension's default entities, options, and connection factory, and disables entity caching.</summary>
-    public static OpenIddictCoreBuilder UseDapper(this OpenIddictCoreBuilder builder)
-        => UseDapper(builder, static _ => { });
+    public static OpenIddictCoreBuilder UseStores(this OpenIddictCoreBuilder builder)
+        => UseStores(builder, static _ => { });
 
     /// <summary>Registers this extension and runs the configuration delegate.</summary>
-    public static OpenIddictCoreBuilder UseDapper(
+    public static OpenIddictCoreBuilder UseStores(
         this OpenIddictCoreBuilder builder, Action<OpenIddictStoreBuilder> configuration)
     {
         if (builder is null)
@@ -39,7 +39,7 @@ public static class OpenIddictStoreCoreBuilderExtensions
 
         services.AddOptions<OpenIddictStoreOptions>();
 
-        // Idempotent: calling UseDapper repeatedly does not register the same service twice.
+        // Idempotent: calling UseStores repeatedly does not register the same service twice.
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<OpenIddictStoreOptions>, OpenIddictStoreOptionsValidator>());
         services.TryAddEnumerable(
@@ -48,7 +48,7 @@ public static class OpenIddictStoreCoreBuilderExtensions
         services.TryAddScoped<IOpenIddictStoreConnectionFactory>(CreateConnectionFactory);
 
         // Entity caching must be disabled: bulk revocation updates the store directly, so cached entities are not refreshed.
-        // Whether caching is configured before or after UseDapper, the final options validation rejects it.
+        // Whether caching is configured before or after UseStores, the final options validation rejects it.
         builder.DisableEntityCaching();
 
         builder.SetDefaultApplicationEntity<OpenIddictStoreApplication>();
@@ -73,6 +73,19 @@ public static class OpenIddictStoreCoreBuilderExtensions
 
         return builder;
     }
+
+    /// <summary>Obsolete alias kept so existing call sites keep compiling; use <see cref="UseStores(OpenIddictCoreBuilder)"/> instead.</summary>
+    /// <remarks>The name is a leftover from an earlier design that depended on Dapper. The package no longer references Dapper at all, so the name is misleading.</remarks>
+    [Obsolete("UseDapper is a historical name; the package does not depend on Dapper. Use UseStores() instead.")]
+    public static OpenIddictCoreBuilder UseDapper(this OpenIddictCoreBuilder builder)
+        => UseStores(builder);
+
+    /// <summary>Obsolete alias kept so existing call sites keep compiling; use <see cref="UseStores(OpenIddictCoreBuilder, Action{OpenIddictStoreBuilder})"/> instead.</summary>
+    /// <remarks>The name is a leftover from an earlier design that depended on Dapper. The package no longer references Dapper at all, so the name is misleading.</remarks>
+    [Obsolete("UseDapper is a historical name; the package does not depend on Dapper. Use UseStores() instead.")]
+    public static OpenIddictCoreBuilder UseDapper(
+        this OpenIddictCoreBuilder builder, Action<OpenIddictStoreBuilder> configuration)
+        => UseStores(builder, configuration);
 
     private static IOpenIddictStoreConnectionFactory CreateConnectionFactory(IServiceProvider services)
     {

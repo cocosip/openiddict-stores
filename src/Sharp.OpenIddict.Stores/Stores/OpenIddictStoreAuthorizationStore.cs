@@ -10,11 +10,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 using Sharp.OpenIddict.Stores.Models;
+using Sharp.OpenIddict.Stores.Queries;
 
 namespace Sharp.OpenIddict.Stores.Stores;
 
 /// <summary>
-/// The Dapper store for Authorization. Scopes are authoritative in JSON, and the AuthorizationScopes auxiliary table is only used for collection lookups.
+/// The store for Authorization. Scopes are authoritative in JSON, and the AuthorizationScopes auxiliary table is only used for collection lookups.
 /// </summary>
 /// <typeparam name="TAuthorization">The entity type, which must be <see cref="OpenIddictStoreAuthorization"/> or a derived type.</typeparam>
 public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStoreBase,
@@ -218,8 +219,14 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
                     ON i.{Column("AuthorizationId")} = a.{Column("Id")}
                 WHERE i.{Column("ScopeHash")} IN ({string.Join(", ", placeholders)}){filter}";
 
-            var ids = await session.QueryScalarsAsync<string>(idSql, groupParameters, cancellationToken)
-                .ConfigureAwait(false);
+            var ids = new List<string>();
+
+            await foreach (var id in session
+                .StreamAsync(idSql, groupParameters, reader => reader.GetString(0), cancellationToken)
+                .ConfigureAwait(false))
+            {
+                ids.Add(id);
+            }
 
             // Intersect across chunks: every requested scope must be present, so a row has to
             // survive every chunk. Only identifier strings are held in memory, never whole entities.
@@ -304,12 +311,12 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
 
         await using var session = await CreateSessionAsync(cancellationToken).ConfigureAwait(false);
 
-        var rows = await session.QueryAsync<OpenIddictStoreAuthorization>(
+        return await session.QuerySingleOrDefaultAsync(
             $"SELECT * FROM {Table(Schema.Authorizations)} " +
             $"WHERE {Dialect.BuildExactStringEquals(Column("Id"), "identifier")}",
-            new { identifier }, cancellationToken).ConfigureAwait(false);
-
-        return rows.Count == 0 ? null : (TAuthorization)(object)rows[0];
+            new { identifier },
+            reader => (TAuthorization)OpenIddictStoreEntityMapper.Map(reader, typeof(TAuthorization), Dialect),
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />

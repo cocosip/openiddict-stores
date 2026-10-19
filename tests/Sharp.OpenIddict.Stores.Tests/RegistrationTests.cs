@@ -10,6 +10,7 @@ using OpenIddict.Abstractions;
 using OpenIddict.Core;
 using Sharp.OpenIddict.Stores;
 using Sharp.OpenIddict.Stores.Models;
+using Sharp.OpenIddict.Stores.Stores;
 using Xunit;
 
 namespace Sharp.OpenIddict.Stores.Tests;
@@ -22,11 +23,11 @@ namespace Sharp.OpenIddict.Stores.Tests;
 public sealed class RegistrationTests
 {
     [Fact]
-    public void UseDapper_RegistersDefaultEntitiesAndDisablesEntityCaching()
+    public void UseStores_RegistersDefaultEntitiesAndDisablesEntityCaching()
     {
         var services = new ServiceCollection();
 
-        services.AddOpenIddict().AddCore(options => options.UseDapper(dapper => dapper
+        services.AddOpenIddict().AddCore(options => options.UseStores(stores => stores
             .UseSqlite()
             .UseConnectionFactory(_ => new FakeConnection())));
 
@@ -51,14 +52,14 @@ public sealed class RegistrationTests
     }
 
     [Fact]
-    public void UseDapper_IsIdempotent()
+    public void UseStores_IsIdempotent()
     {
         var services = new ServiceCollection();
 
         services.AddOpenIddict().AddCore(options =>
         {
-            options.UseDapper(dapper => dapper.UseSqlite().UseConnectionFactory(_ => new FakeConnection()));
-            options.UseDapper(dapper => dapper.UseSqlite().UseConnectionFactory(_ => new FakeConnection()));
+            options.UseStores(stores => stores.UseSqlite().UseConnectionFactory(_ => new FakeConnection()));
+            options.UseStores(stores => stores.UseSqlite().UseConnectionFactory(_ => new FakeConnection()));
         });
 
         using var provider = services.BuildServiceProvider();
@@ -77,7 +78,7 @@ public sealed class RegistrationTests
     {
         var services = new ServiceCollection();
 
-        services.AddOpenIddict().AddCore(options => options.UseDapper(dapper => dapper
+        services.AddOpenIddict().AddCore(options => options.UseStores(stores => stores
             .UseSqlite()
             .UseProvider(OpenIddictStoreProvider.PostgreSql)
             .UseConnectionFactory(_ => new FakeConnection())));
@@ -95,7 +96,7 @@ public sealed class RegistrationTests
     {
         var services = new ServiceCollection();
 
-        services.AddOpenIddict().AddCore(options => options.UseDapper(dapper => dapper
+        services.AddOpenIddict().AddCore(options => options.UseStores(stores => stores
             .UseConnectionFactory(_ => new FakeConnection())));
 
         using var provider = services.BuildServiceProvider();
@@ -111,7 +112,7 @@ public sealed class RegistrationTests
     {
         var services = new ServiceCollection();
 
-        services.AddOpenIddict().AddCore(options => options.UseDapper(dapper => dapper.UseSqlite()));
+        services.AddOpenIddict().AddCore(options => options.UseStores(stores => stores.UseSqlite()));
 
         using var provider = services.BuildServiceProvider();
 
@@ -124,19 +125,19 @@ public sealed class RegistrationTests
     [Fact]
     public void InvalidTablePrefixAndTimeoutAndSchema_AreRejected()
     {
-        AssertRejected(dapper => dapper.UseSqlite().UseConnectionFactory(_ => new FakeConnection())
+        AssertRejected(stores => stores.UseSqlite().UseConnectionFactory(_ => new FakeConnection())
             .SetTablePrefix("1abc"), "table prefix");
-        AssertRejected(dapper => dapper.UseSqlite().UseConnectionFactory(_ => new FakeConnection())
+        AssertRejected(stores => stores.UseSqlite().UseConnectionFactory(_ => new FakeConnection())
             .SetTablePrefix("has-dash"), "table prefix");
-        AssertRejected(dapper => dapper.UseSqlite().UseConnectionFactory(_ => new FakeConnection())
+        AssertRejected(stores => stores.UseSqlite().UseConnectionFactory(_ => new FakeConnection())
             .SetCommandTimeout(0), "command timeout");
-        AssertRejected(dapper => dapper.UseSqlite().UseConnectionFactory(_ => new FakeConnection())
+        AssertRejected(stores => stores.UseSqlite().UseConnectionFactory(_ => new FakeConnection())
             .SetCommandTimeout(-5), "command timeout");
-        AssertRejected(dapper => dapper.UseProvider(OpenIddictStoreProvider.PostgreSql).UseConnectionFactory(_ => new FakeConnection())
+        AssertRejected(stores => stores.UseProvider(OpenIddictStoreProvider.PostgreSql).UseConnectionFactory(_ => new FakeConnection())
             .SetSchema("bad schema"), "schema");
-        AssertRejected(dapper => dapper.UseSqlite().UseConnectionFactory(_ => new FakeConnection())
+        AssertRejected(stores => stores.UseSqlite().UseConnectionFactory(_ => new FakeConnection())
             .SetSchema("public"), "do not support dedicated schema");
-        AssertRejected(dapper => dapper.UseProvider(OpenIddictStoreProvider.MySql).UseConnectionFactory(_ => new FakeConnection())
+        AssertRejected(stores => stores.UseProvider(OpenIddictStoreProvider.MySql).UseConnectionFactory(_ => new FakeConnection())
             .SetSchema("public"), "do not support dedicated schema");
     }
 
@@ -145,7 +146,7 @@ public sealed class RegistrationTests
     {
         var services = new ServiceCollection();
 
-        services.AddOpenIddict().AddCore(options => options.UseDapper(dapper => dapper
+        services.AddOpenIddict().AddCore(options => options.UseStores(stores => stores
             .UseProvider(OpenIddictStoreProvider.PostgreSql)
             .UseConnectionFactory(_ => new FakeConnection())
             .SetSchema("openiddict")));
@@ -158,31 +159,31 @@ public sealed class RegistrationTests
     [Fact]
     public void ReEnablingEntityCaching_IsRejectedRegardlessOfOrder()
     {
-        // Enabling caching after UseDapper: the effective value ends up enabled, so it must be rejected.
+        // Enabling caching after UseStores: the effective value ends up enabled, so it must be rejected.
         AssertCacheRejected(options =>
         {
-            options.UseDapper(dapper => dapper.UseSqlite().UseConnectionFactory(_ => new FakeConnection()));
+            options.UseStores(stores => stores.UseSqlite().UseConnectionFactory(_ => new FakeConnection()));
             options.Configure(core => core.DisableEntityCaching = false);
         });
 
-        // Disable first, then UseDapper, then re-enable: the effective value is still enabled, so it must be rejected.
+        // Disable first, then UseStores, then re-enable: the effective value is still enabled, so it must be rejected.
         AssertCacheRejected(options =>
         {
             options.Configure(core => core.DisableEntityCaching = true);
-            options.UseDapper(dapper => dapper.UseSqlite().UseConnectionFactory(_ => new FakeConnection()));
+            options.UseStores(stores => stores.UseSqlite().UseConnectionFactory(_ => new FakeConnection()));
             options.Configure(core => core.DisableEntityCaching = false);
         });
     }
 
     [Fact]
-    public void DisablingEntityCachingBeforeUseDapper_IsAccepted()
+    public void DisablingEntityCachingBeforeUseStores_IsAccepted()
     {
         var services = new ServiceCollection();
 
         services.AddOpenIddict().AddCore(options =>
         {
             options.Configure(core => core.DisableEntityCaching = true);
-            options.UseDapper(dapper => dapper.UseSqlite().UseConnectionFactory(_ => new FakeConnection()));
+            options.UseStores(stores => stores.UseSqlite().UseConnectionFactory(_ => new FakeConnection()));
         });
 
         using var provider = services.BuildServiceProvider();
@@ -195,7 +196,7 @@ public sealed class RegistrationTests
     {
         var services = new ServiceCollection();
 
-        services.AddOpenIddict().AddCore(options => options.UseDapper(dapper => dapper
+        services.AddOpenIddict().AddCore(options => options.UseStores(stores => stores
             .UseSqlite()
             .UseConnectionFactory<TrackingConnectionFactory>()));
 
@@ -211,7 +212,7 @@ public sealed class RegistrationTests
     {
         var services = new ServiceCollection();
 
-        services.AddOpenIddict().AddCore(options => options.UseDapper(dapper => dapper
+        services.AddOpenIddict().AddCore(options => options.UseStores(stores => stores
             .UseSqlite()
             .UseConnectionFactory(_ => new FakeConnection())));
 
@@ -224,11 +225,40 @@ public sealed class RegistrationTests
         Assert.IsType<FakeConnection>(connection);
     }
 
+    /// <summary>
+    /// The obsolete alias must stay behaviourally identical to the new name. If it were ever turned into a
+    /// no-op, existing call sites would silently register nothing.
+    /// </summary>
+    [Fact]
+    public void UseDapper_RemainsAnAliasOfUseStores()
+    {
+        var services = new ServiceCollection();
+
+#pragma warning disable CS0618 // The point of this test is the obsolete alias.
+        services.AddOpenIddict().AddCore(options => options.UseDapper(stores => stores
+            .UseSqlite()
+            .UseConnectionFactory(_ => new FakeConnection())));
+#pragma warning restore CS0618
+
+        using var provider = services.BuildServiceProvider();
+
+        var core = provider.GetRequiredService<IOptions<OpenIddictCoreOptions>>().Value;
+        Assert.True(core.DisableEntityCaching);
+
+        Assert.Single(services, service =>
+            service.ServiceType == typeof(IOpenIddictStoreConnectionFactory));
+        Assert.NotNull(provider.GetRequiredService<IOptions<OpenIddictStoreOptions>>().Value);
+
+        // Resolving the store proves the alias registered the real implementation, not just options.
+        Assert.IsType<OpenIddictStoreApplicationStore<OpenIddictStoreApplication>>(
+            provider.GetRequiredService<global::OpenIddict.Abstractions.IOpenIddictApplicationStore<OpenIddictStoreApplication>>());
+    }
+
     private static void AssertRejected(Action<OpenIddictStoreBuilder> configure, string expected)
     {
         var services = new ServiceCollection();
 
-        services.AddOpenIddict().AddCore(options => options.UseDapper(configure));
+        services.AddOpenIddict().AddCore(options => options.UseStores(configure));
 
         using var provider = services.BuildServiceProvider();
 

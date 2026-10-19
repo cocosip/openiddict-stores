@@ -35,7 +35,14 @@ internal sealed class OpenIddictStoreQueryBuilder<TEntity>
     /// Builds a plan from an already-recorded expression tree. The tree starts at the entity set node
     /// created by <see cref="OpenIddictStoreQueryable{T}"/>, so the operators appear in call order.
     /// </summary>
-    public OpenIddictStoreQueryPlan Build<TResult>(string table, Expression expression)
+    /// <param name="table">The already quoted table name.</param>
+    /// <param name="expression">The recorded query expression tree.</param>
+    /// <param name="forCount">
+    /// True when the plan is wrapped in <c>SELECT COUNT(*)</c>. An ORDER BY without paging is then
+    /// dropped: it cannot change the row count, and SQL Server rejects ORDER BY in a derived table
+    /// unless TOP/OFFSET/FETCH is also present (design 9, QUERY-02).
+    /// </param>
+    public OpenIddictStoreQueryPlan Build<TResult>(string table, Expression expression, bool forCount = false)
     {
         if (expression is null)
         {
@@ -84,7 +91,8 @@ internal sealed class OpenIddictStoreQueryBuilder<TEntity>
         var parameters = new Dictionary<string, object?>(StringComparer.Ordinal);
         var select = BuildProjection(projection, translator);
 
-        var sql = BuildSql(table, inner, select, parameters, translator, hasOuterProjection, outerPredicates);
+        var sql = BuildSql(table, inner, select, parameters, translator, hasOuterProjection, outerPredicates,
+            forCount && firstLimit < 0);
 
         return new OpenIddictStoreQueryPlan(sql, parameters, select.Kind, _dialect);
     }
@@ -96,7 +104,8 @@ internal sealed class OpenIddictStoreQueryBuilder<TEntity>
         Dictionary<string, object?> parameters,
         OpenIddictStorePredicateTranslator translator,
         bool hasOuterProjection,
-        List<string> outerPredicates)
+        List<string> outerPredicates,
+        bool dropOrdering)
     {
         var where = new List<string>();
         var orderBy = new List<string>();
@@ -124,6 +133,22 @@ internal sealed class OpenIddictStoreQueryBuilder<TEntity>
                     take = step.Amount;
                     break;
             }
+        }
+
+        // A count over an unordered, unpaged query cannot be affected by ORDER BY, and SQL Server refuses
+        // ORDER BY inside the derived table COUNT wraps.
+        if (dropOrdering && skip is null && take is null)
+        {
+            orderBy.Clear();
+        }
+
+        // Take(0) must return no rows on every provider. SQL Server rejects FETCH NEXT 0 ROWS, so the
+        // empty result is expressed as a predicate instead of a zero row count.
+        if (take == 0)
+        {
+            where.Add("1 = 0");
+            skip = null;
+            take = null;
         }
 
         var columns = projection.Kind == OpenIddictStoreProjectionKind.Entity

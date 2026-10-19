@@ -192,6 +192,6 @@ internal sealed class OpenIddictStoreCoreOptionsValidator : IValidateOptions<Ope
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(
                 "This extension requires OpenIddict entity caching to be disabled: bulk revocation updates the store directly, so cached entities are never refreshed. " +
-                "Remove the configuration that re-enables entity caching, or do not use UseDapper.");
+                "Remove the configuration that re-enables entity caching, or do not use UseStores.");
     }
 }

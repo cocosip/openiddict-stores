@@ -10,11 +10,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 using Sharp.OpenIddict.Stores.Models;
+using Sharp.OpenIddict.Stores.Queries;
 
 namespace Sharp.OpenIddict.Stores.Stores;
 
 /// <summary>
-/// The Dapper store for Token. Tokens have no collection columns, so no auxiliary index table is maintained.
+/// The store for Token. Tokens have no collection columns, so no auxiliary index table is maintained.
 /// </summary>
 /// <typeparam name="TToken">The entity type, which must be <see cref="OpenIddictStoreToken"/> or a derived type.</typeparam>
 public class OpenIddictStoreTokenStore<TToken> : OpenIddictStoreBase, IOpenIddictTokenStore<TToken>
@@ -201,12 +202,12 @@ public class OpenIddictStoreTokenStore<TToken> : OpenIddictStoreBase, IOpenIddic
 
         await using var session = await CreateSessionAsync(cancellationToken).ConfigureAwait(false);
 
-        var rows = await session.QueryAsync<OpenIddictStoreToken>(
+        return await session.QuerySingleOrDefaultAsync(
             $"SELECT * FROM {Table(Schema.Tokens)} " +
             $"WHERE {Dialect.BuildExactStringEquals(Column("Id"), "identifier")}",
-            new { identifier }, cancellationToken).ConfigureAwait(false);
-
-        return rows.Count == 0 ? null : (TToken)(object)rows[0];
+            new { identifier },
+            reader => (TToken)OpenIddictStoreEntityMapper.Map(reader, typeof(TToken), Dialect),
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -217,12 +218,12 @@ public class OpenIddictStoreTokenStore<TToken> : OpenIddictStoreBase, IOpenIddic
 
         await using var session = await CreateSessionAsync(cancellationToken).ConfigureAwait(false);
 
-        var rows = await session.QueryAsync<OpenIddictStoreToken>(
+        return await session.QuerySingleOrDefaultAsync(
             $"SELECT * FROM {Table(Schema.Tokens)} " +
             $"WHERE {Dialect.BuildExactStringEquals(Column("ReferenceId"), "identifier")}",
-            new { identifier }, cancellationToken).ConfigureAwait(false);
-
-        return rows.Count == 0 ? null : (TToken)(object)rows[0];
+            new { identifier },
+            reader => (TToken)OpenIddictStoreEntityMapper.Map(reader, typeof(TToken), Dialect),
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />

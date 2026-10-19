@@ -11,11 +11,12 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
 using Sharp.OpenIddict.Stores.Models;
+using Sharp.OpenIddict.Stores.Queries;
 
 namespace Sharp.OpenIddict.Stores.Stores;
 
 /// <summary>
-/// The Dapper store for Application. Collections and dictionaries are persisted as JSON, and collections involved in lookups also have auxiliary index tables.
+/// The store for Application. Collections and dictionaries are persisted as JSON, and collections involved in lookups also have auxiliary index tables.
 /// </summary>
 /// <typeparam name="TApplication">The entity type, which must be <see cref="OpenIddictStoreApplication"/> or a derived type.</typeparam>
 public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase,
@@ -639,13 +640,11 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
 
     private async ValueTask<TApplication?> QueryOneAsync(
         OpenIddictStoreSession session, string where, object parameters, CancellationToken cancellationToken)
-    {
-        var rows = await session.QueryAsync<OpenIddictStoreApplication>(
+        => await session.QuerySingleOrDefaultAsync(
             $"SELECT * FROM {Table(Schema.Applications)} {where}",
-            parameters, cancellationToken).ConfigureAwait(false);
-
-        return rows.Count == 0 ? null : (TApplication)(object)rows[0];
-    }
+            parameters,
+            reader => (TApplication)OpenIddictStoreEntityMapper.Map(reader, typeof(TApplication), Dialect),
+            cancellationToken).ConfigureAwait(false);
 
     private async IAsyncEnumerable<TApplication> FindByCollectionAsync(
         string table, string ownerColumn, string hashColumn, string valueColumn, string value,
@@ -661,19 +660,23 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
             INNER JOIN {Table(table)} i ON i.{Column(ownerColumn)} = a.{Column("Id")}
             WHERE i.{Column(hashColumn)} = @hash";
 
-        var candidates = await session.QueryAsync<OpenIddictStoreApplication>(
-            sql, new { hash = OpenIddictStoreSession.Hash(value) }, cancellationToken).ConfigureAwait(false);
-
-        foreach (var candidate in candidates)
+        await foreach (var candidate in session.StreamAsync(
+            sql,
+            new { hash = OpenIddictStoreSession.Hash(value) },
+            reader => OpenIddictStoreEntityMapper.Map(reader, typeof(TApplication), Dialect),
+            cancellationToken).ConfigureAwait(false))
         {
+            var application = (TApplication)candidate;
+            var entity = (OpenIddictStoreApplication)(object)application;
+
             var values = valueColumn == "Uri"
                 ? OpenIddictStoreJson.DeserializeStrings(
-                    table == Schema.ApplicationRedirectUris ? candidate.RedirectUris : candidate.PostLogoutRedirectUris)
+                    table == Schema.ApplicationRedirectUris ? entity.RedirectUris : entity.PostLogoutRedirectUris)
                 : ImmutableArray<string>.Empty;
 
             if (values.Contains(value, StringComparer.Ordinal))
             {
-                yield return (TApplication)(object)candidate;
+                yield return application;
             }
         }
     }

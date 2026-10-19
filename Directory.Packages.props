@@ -6,8 +6,6 @@
     packages are referenced (design 2, design 3).
   -->
   <ItemGroup>
-    <PackageVersion Include="Dapper" Version="2.1.89" />
-
     <PackageVersion Include="OpenIddict.Abstractions" Version="7.7.2" />
     <PackageVersion Include="OpenIddict.Core" Version="7.7.2" />
     <PackageVersion Include="OpenIddict.Server.AspNetCore" Version="7.7.2" />

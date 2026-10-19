@@ -10,11 +10,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 using Sharp.OpenIddict.Stores.Models;
+using Sharp.OpenIddict.Stores.Queries;
 
 namespace Sharp.OpenIddict.Stores.Stores;
 
 /// <summary>
-/// The Dapper store for Scope. Resources are authoritative in JSON, and the ScopeResources auxiliary table is only used for lookups by resource name.
+/// The store for Scope. Resources are authoritative in JSON, and the ScopeResources auxiliary table is only used for lookups by resource name.
 /// </summary>
 /// <typeparam name="TScope">The entity type, which must be <see cref="OpenIddictStoreScope"/> or a derived type.</typeparam>
 public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddictScopeStore<TScope>
@@ -201,15 +202,18 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
             INNER JOIN {Table(Schema.ScopeResources)} i ON i.{Column("ScopeId")} = s.{Column("Id")}
             WHERE i.{Column("ResourceHash")} = @hash";
 
-        var candidates = await session.QueryAsync<OpenIddictStoreScope>(
-            sql, new { hash = OpenIddictStoreSession.Hash(resource) }, cancellationToken).ConfigureAwait(false);
-
-        foreach (var candidate in candidates)
+        await foreach (var candidate in session.StreamAsync(
+            sql,
+            new { hash = OpenIddictStoreSession.Hash(resource) },
+            reader => OpenIddictStoreEntityMapper.Map(reader, typeof(TScope), Dialect),
+            cancellationToken).ConfigureAwait(false))
         {
-            if (OpenIddictStoreJson.DeserializeStrings(candidate.Resources)
+            var scope = (TScope)candidate;
+
+            if (OpenIddictStoreJson.DeserializeStrings(((OpenIddictStoreScope)(object)scope).Resources)
                 .Contains(resource, StringComparer.Ordinal))
             {
-                yield return (TScope)(object)candidate;
+                yield return scope;
             }
         }
     }
@@ -426,12 +430,11 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
 
     private async ValueTask<TScope?> QueryOneAsync(
         OpenIddictStoreSession session, string where, object parameters, CancellationToken cancellationToken)
-    {
-        var rows = await session.QueryAsync<OpenIddictStoreScope>(
-            $"SELECT * FROM {Table(Schema.Scopes)} {where}", parameters, cancellationToken).ConfigureAwait(false);
-
-        return rows.Count == 0 ? null : (TScope)(object)rows[0];
-    }
+        => await session.QuerySingleOrDefaultAsync(
+            $"SELECT * FROM {Table(Schema.Scopes)} {where}",
+            parameters,
+            reader => (TScope)OpenIddictStoreEntityMapper.Map(reader, typeof(TScope), Dialect),
+            cancellationToken).ConfigureAwait(false);
 
     private async ValueTask ReplaceResourcesAsync(
         OpenIddictStoreSession session, System.Data.Common.DbTransaction transaction, string scopeId,

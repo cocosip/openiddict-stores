@@ -177,7 +177,7 @@ public abstract class OpenIddictStoreBase
             throw new ArgumentNullException(nameof(query));
         }
 
-        var plan = CreateQueryBuilder<TEntity>().Build<TResult>(table, Record(query));
+        var plan = CreateQueryBuilder<TEntity>().Build<TResult>(table, Record(query), forCount: true);
         var sql = $"SELECT COUNT(*) FROM ({plan.Sql}) AS translated";
 
         await using var session = await CreateSessionAsync(cancellationToken).ConfigureAwait(false);
