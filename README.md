@@ -6,6 +6,18 @@ The [project design document](docs/design.md) is the authority for development, 
 
 The [development and progress document](docs/development.md) breaks the design into checkable implementation tasks and records phase progress, completion criteria, the per-database acceptance matrix, and commit and verification evidence; MIG-03/04 and section 5.1 track delivery, upgrade and maintenance acceptance for each database's SQL scripts. Each completed item must update its task status and completion record.
 
-Current state: the solution layout, central package management and five-target multi-targeting are in place, and the project restores, builds, packs and passes 254 tests (43 unit + 211 integration). The core package provides the builder, options validation, connection factory, default entity registration, JSON/UTC converters, the four stores (Application, Scope, Authorization, Token) and the `IQueryable` callback translator. SQLite is the only provider with an executable `v0001` install script and full real-database acceptance; the remaining five dialects and the protocol-level integration with a live OpenIddict server are not implemented yet, so this is not a released package.
+Current state: the solution layout, central package management and five-target multi-targeting are in place, and the project restores, builds, packs eight packages and passes 364 tests (85 unit + 279 integration, 16 skipped) with no database server installed. The core package provides the builder, options validation, connection factory, default entity registration, JSON/UTC converters, the four stores (Application, Scope, Authorization, Token) and the `IQueryable` callback translator.
+
+All six dialects and their versioned install scripts are delivered: SQLite, SQL Server, PostgreSQL, MySQL/MariaDB, Oracle and Dameng (native mode only). Only **SQLite** has real-database acceptance evidence, because it needs no server — it is the existing NuGet driver plus a temporary file. SQL Server, PostgreSQL, MySQL, MariaDB, Oracle and DM are implemented and statically reviewed but **not verified against a live server**, so they are not yet within the supported range; the per-database status in the acceptance matrix records exactly what was and was not executed. Protocol-level integration with a live OpenIddict server is not implemented yet, so this is not a released package.
+
+## Verifying locally
+
+```pwsh
+pwsh ./scripts/verify.ps1
+```
+
+Runs restore, a `--no-incremental` Release build for all target frameworks, the unit and integration tests (SQLite runs for real; the server-backed suites skip and say so), packing, and the package-content checks. Every step propagates its exit code, so a failure cannot be reported as a pass. Add `-SkipPack` to skip the packaging steps.
+
+## Historical note
 
 The project was previously named `Sharp.OpenIddict.Dapper.*`. The name changed because the delivered artifact is the set of OpenIddict store implementations, not a Dapper extension: Dapper's API appears in a single type (8 call sites) and is confined there by a test (design 9.3).

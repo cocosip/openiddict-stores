@@ -227,6 +227,60 @@ public sealed class PackageAssetTests
         Assert.Contains("sql/README.md", sqlite);
     }
 
+    /// <summary>
+    /// Every packaged SQL file must be byte-for-byte the repository source (design 10.1): the SHA-256 in the
+    /// manifest is computed over the shipped bytes, so a difference of one byte - a BOM, a CRLF, a stale copy -
+    /// makes the recorded digest unusable and the deployed script different from the reviewed one.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ProviderNames))]
+    public void PackagedSql_IsByteIdenticalToTheRepositorySource(string provider)
+    {
+        var product = "Sharp.OpenIddict.Stores." + provider;
+        var sourceRoot = Path.Combine(RepositoryRoot, "src", product, "Sql");
+
+        using var archive = ZipFile.OpenRead(PackagePath(product));
+
+        var packaged = archive.Entries
+            .Where(entry => entry.FullName.StartsWith("sql/", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.NotEmpty(packaged);
+
+        foreach (var entry in packaged)
+        {
+            var relative = entry.FullName["sql/".Length..].Replace('/', Path.DirectorySeparatorChar);
+            var source = Path.Combine(sourceRoot, relative);
+
+            Assert.True(File.Exists(source), $"{provider} packages '{entry.FullName}', which has no source file.");
+
+            using var packagedStream = entry.Open();
+            using var packagedBytes = new MemoryStream();
+            packagedStream.CopyTo(packagedBytes);
+
+            Assert.Equal(File.ReadAllBytes(source), packagedBytes.ToArray());
+        }
+
+        // The reverse direction matters too: a source file missing from the package would simply never ship.
+        var expected = Directory.EnumerateFiles(sourceRoot, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(sourceRoot, path).Replace(Path.DirectorySeparatorChar, '/'))
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToList();
+
+        var actual = packaged
+            .Select(entry => entry.FullName["sql/".Length..])
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(expected, actual);
+    }
+
+    public static IEnumerable<object[]> ProviderNames()
+        => new[]
+        {
+            "SqlServer", "PostgreSql", "MySql", "Sqlite", "Oracle", "Dm"
+        }.Select(provider => new object[] { provider });
+
     public static IEnumerable<object[]> ProductNames()
         => Products.Select(product => new object[] { product });
 
