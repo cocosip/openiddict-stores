@@ -107,6 +107,8 @@ public sealed class SqlAssetTests
     [InlineData("SqlServer")]
     [InlineData("PostgreSql")]
     [InlineData("MySql")]
+    [InlineData("Oracle")]
+    [InlineData("Dm")]
     public void Manifest_TargetsTheVersionTheRuntimeRequires(string provider)
     {
         var manifestPath = Path.Combine(RepositoryRoot, "src", $"Sharp.OpenIddict.Stores.{provider}", "Sql", "manifest.json");

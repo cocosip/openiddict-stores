@@ -1,0 +1,19 @@
+{
+  "provider": "Dm",
+  "series": "7",
+  "entries": [
+    {
+      "type": "install",
+      "server": "DM8 (native mode)",
+      "minimumVersion": "DM8",
+      "state": "available",
+      "rendersTokens": ["__PREFIX__", "__SCHEMA__"],
+      "sourceSeries": null,
+      "sourceVersion": null,
+      "targetSeries": "7",
+      "targetVersion": 1,
+      "path": "7/install/v0001.sql.template",
+      "sha256": "327D2269CC8072A0A21CE2DEA29D9FBA952D92C862F46871E4F9C2F3C2D78708"
+    }
+  ]
+}
