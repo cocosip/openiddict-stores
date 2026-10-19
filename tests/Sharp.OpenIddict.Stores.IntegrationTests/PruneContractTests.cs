@@ -31,7 +31,7 @@ public sealed class PruneContractTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _databasePath = Path.Combine(Path.GetTempPath(), $"oidc-prune-{Guid.NewGuid():N}.db");
+        _databasePath = TestDatabaseName.CreateFilePath("PruneContractTests");
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = _databasePath,

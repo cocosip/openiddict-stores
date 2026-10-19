@@ -33,7 +33,7 @@ public sealed class AccessorContractTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _databasePath = Path.Combine(Path.GetTempPath(), $"oidc-accessor-{Guid.NewGuid():N}.db");
+        _databasePath = TestDatabaseName.CreateFilePath("AccessorContractTests");
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = _databasePath,

@@ -31,7 +31,7 @@ public sealed class CollectionIndexContractTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _databasePath = Path.Combine(Path.GetTempPath(), $"oidc-index-{Guid.NewGuid():N}.db");
+        _databasePath = TestDatabaseName.CreateFilePath("CollectionIndexContractTests");
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = _databasePath,

@@ -32,7 +32,7 @@ public sealed class SqliteApplicationStoreTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _databasePath = Path.Combine(Path.GetTempPath(), $"oidc-app-{Guid.NewGuid():N}.db");
+        _databasePath = TestDatabaseName.CreateFilePath("SqliteApplicationStoreTests");
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = _databasePath,

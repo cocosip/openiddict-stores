@@ -31,7 +31,7 @@ public sealed class SqliteScopeStoreTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _databasePath = Path.Combine(Path.GetTempPath(), $"oidc-scope-{Guid.NewGuid():N}.db");
+        _databasePath = TestDatabaseName.CreateFilePath("SqliteScopeStoreTests");
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = _databasePath,

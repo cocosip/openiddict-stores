@@ -24,7 +24,7 @@ public sealed class SchemaVersionContractTests : IAsyncLifetime
 
     public Task InitializeAsync()
     {
-        _databasePath = Path.Combine(Path.GetTempPath(), $"oidc-version-{Guid.NewGuid():N}.db");
+        _databasePath = TestDatabaseName.CreateFilePath("SchemaVersionContractTests");
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = _databasePath,

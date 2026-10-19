@@ -30,7 +30,7 @@ public sealed class BulkRevocationContractTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _databasePath = Path.Combine(Path.GetTempPath(), $"oidc-revoke-{Guid.NewGuid():N}.db");
+        _databasePath = TestDatabaseName.CreateFilePath("BulkRevocationContractTests");
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = _databasePath,

@@ -30,7 +30,7 @@ public sealed class SqliteAuthorizationStoreTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _databasePath = Path.Combine(Path.GetTempPath(), $"oidc-auth-{Guid.NewGuid():N}.db");
+        _databasePath = TestDatabaseName.CreateFilePath("SqliteAuthorizationStoreTests");
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = _databasePath,

@@ -243,7 +243,7 @@ public sealed class SqliteAcceptanceTests
     private static async Task<SqliteConnection> OpenAsync(string? path = null)
     {
         var connection = new SqliteConnection(BuildConnectionString(
-            path ?? Path.Combine(Path.GetTempPath(), $"oidc-open-{Guid.NewGuid():N}.db")));
+            path ?? TestDatabaseName.CreateFilePath("SqliteAcceptanceTests")));
 
         await connection.OpenAsync();
 
@@ -253,7 +253,7 @@ public sealed class SqliteAcceptanceTests
     /// <summary>Creates a temporary database, applies the shipped install script, and returns its path.</summary>
     private static async Task<string> CreateInstalledDatabaseAsync()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"oidc-db01-{Guid.NewGuid():N}.db");
+        var path = TestDatabaseName.CreateFilePath("SqliteAcceptanceTests");
 
         await using var connection = new SqliteConnection(BuildConnectionString(path));
         await connection.OpenAsync();

@@ -27,7 +27,7 @@ public sealed class QueryTranslationContractTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _databasePath = Path.Combine(Path.GetTempPath(), $"oidc-query-{Guid.NewGuid():N}.db");
+        _databasePath = TestDatabaseName.CreateFilePath("QueryTranslationContractTests");
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = _databasePath,

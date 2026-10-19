@@ -26,7 +26,7 @@ public sealed class SqliteTokenStoreTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _databasePath = Path.Combine(Path.GetTempPath(), $"oidc-token-{Guid.NewGuid():N}.db");
+        _databasePath = TestDatabaseName.CreateFilePath("SqliteTokenStoreTests");
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = _databasePath,

@@ -29,7 +29,7 @@ public sealed class ManagerIntegrationTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _databasePath = Path.Combine(Path.GetTempPath(), $"oidc-manager-{Guid.NewGuid():N}.db");
+        _databasePath = TestDatabaseName.CreateFilePath("ManagerIntegrationTests");
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = _databasePath,

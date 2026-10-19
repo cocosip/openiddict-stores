@@ -212,7 +212,7 @@ public sealed class ConnectionLifecycleTests
 
     private static async Task<(string Path, string ConnectionString)> CreateDatabaseAsync()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"oidc-lifecycle-{Guid.NewGuid():N}.db");
+        var path = TestDatabaseName.CreateFilePath("ConnectionLifecycleTests");
         var connectionString = new SqliteConnectionStringBuilder { DataSource = path, ForeignKeys = true }.ToString();
 
         await using var connection = new SqliteConnection(connectionString);

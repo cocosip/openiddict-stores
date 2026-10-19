@@ -25,7 +25,7 @@ public sealed class SqliteInstallScriptTests : IAsyncLifetime
 
     public Task InitializeAsync()
     {
-        _databasePath = Path.Combine(Path.GetTempPath(), $"oidc-dapper-{Guid.NewGuid():N}.db");
+        _databasePath = TestDatabaseName.CreateFilePath("SqliteInstallScriptTests");
         return Task.CompletedTask;
     }
 

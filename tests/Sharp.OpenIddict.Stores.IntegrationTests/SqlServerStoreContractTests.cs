@@ -43,7 +43,7 @@ public sealed class SqlServerStoreContractTests : IAsyncLifetime
             return;
         }
 
-        _databaseName = "oidc-db02-" + Guid.NewGuid().ToString("N");
+        _databaseName = TestDatabaseName.Create("db02");
 
         await using (var master = new SqlConnection(_masterConnectionString))
         {
@@ -86,6 +86,14 @@ public sealed class SqlServerStoreContractTests : IAsyncLifetime
     public async Task DisposeAsync()
     {
         if (_databaseName.Length == 0 || _masterConnectionString.Length == 0)
+        {
+            return;
+        }
+
+        // Refuse to drop anything this fixture did not create. The name is generated in InitializeAsync with a
+        // fixed prefix and a fresh GUID, so a mismatch means something is wrong with this run's state - and
+        // "something is wrong" must never turn into dropping a database that belongs to someone else.
+        if (!TestDatabaseName.IsOwnedByThisTestRun(_databaseName))
         {
             return;
         }

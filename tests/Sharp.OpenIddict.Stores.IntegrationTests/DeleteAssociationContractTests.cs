@@ -30,7 +30,7 @@ public sealed class DeleteAssociationContractTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _databasePath = Path.Combine(Path.GetTempPath(), $"oidc-delete-{Guid.NewGuid():N}.db");
+        _databasePath = TestDatabaseName.CreateFilePath("DeleteAssociationContractTests");
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = _databasePath,
