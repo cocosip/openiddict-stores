@@ -16,7 +16,19 @@ public interface IOpenIddictStoreDialect
     /// <summary>The maximum number of parameters allowed in a single command; chunking and IN protection rely on it.</summary>
     int MaximumParameters { get; }
 
-    /// <summary>Quotes a validated identifier (table name, column name, or constraint name).</summary>
+    /// <summary>
+    /// The maximum identifier length in bytes, or <see cref="int.MaxValue"/> when the provider has no limit.
+    /// Truncating a table name would leave structures the stores can never find again, so an over-long table
+    /// prefix is rejected up front instead (design 15.4).
+    /// </summary>
+    int MaximumIdentifierLength { get; }
+
+    /// <summary>
+    /// Quotes a validated identifier (table name, column name, or constraint name), rejecting one longer than
+    /// <see cref="MaximumIdentifierLength"/>. Every table and column name reaches the server through here, so
+    /// a prefix the provider would silently truncate fails where it is used instead of creating structures the
+    /// stores can never find again (design 15.4).
+    /// </summary>
     string QuoteIdentifier(string identifier);
 
     /// <summary>

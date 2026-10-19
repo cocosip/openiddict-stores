@@ -40,6 +40,25 @@ public static class OpenIddictStoreIdentifiers
     }
 
     /// <summary>
+    /// Rejects an identifier longer than the provider limit. The check is in bytes, because that is how the
+    /// engines count: PostgreSQL truncates at 63 bytes without an error, so a long table prefix would
+    /// otherwise create tables the stores can never find again (design 15.4).
+    /// </summary>
+    /// <param name="identifier">The already validated identifier.</param>
+    /// <param name="maximumLength">The provider limit in bytes, or <see cref="int.MaxValue"/> for no limit.</param>
+    public static string ValidateLength(string identifier, int maximumLength)
+    {
+        if (maximumLength != int.MaxValue && Encoding.UTF8.GetByteCount(identifier) > maximumLength)
+        {
+            throw new ArgumentException(
+                $"'{identifier}' is longer than the {maximumLength}-byte identifier limit of this database; " +
+                "shorten the table prefix instead of letting the server truncate the name.", nameof(identifier));
+        }
+
+        return identifier;
+    }
+
+    /// <summary>
     /// Renders a deployment copy from a shipped <c>.sql.template</c>: <c>__PREFIX__</c> becomes the table
     /// prefix and <c>__SCHEMA__</c> becomes the quoted schema plus its trailing dot (nothing when the
     /// provider default schema is used, or when the template has no schema placeholder). Both are validated
@@ -64,6 +83,12 @@ public static class OpenIddictStoreIdentifiers
 
         Validate(prefix, nameof(prefix));
 
+        // The rendered copy must obey the same identifier limit as the runtime, otherwise the script would
+        // create truncated tables the stores can never find (design 15.4). The longest object name in the
+        // shipped templates is the prefix plus the longest fixed suffix, so checking the whole rendered text
+        // is both accurate and independent of how a template names its constraints.
+        ValidateRenderedIdentifiers(template, dialect, prefix);
+
         var qualifier = string.IsNullOrEmpty(schema)
             ? string.Empty
             // Quoted so a schema that collides with a keyword still works.
@@ -72,6 +97,27 @@ public static class OpenIddictStoreIdentifiers
         return template
             .Replace("__SCHEMA__", qualifier)
             .Replace("__PREFIX__", prefix);
+    }
+
+    /// <summary>
+    /// Rejects a template whose rendered identifiers would exceed the provider limit. Every object name in the
+    /// shipped templates starts at the prefix placeholder, so each one is measured as prefix plus its fixed
+    /// suffix; this keeps table, constraint, and index names within the limit for any accepted prefix
+    /// (design 15.4).
+    /// </summary>
+    private static void ValidateRenderedIdentifiers(string template, IOpenIddictStoreDialect dialect, string prefix)
+    {
+        if (dialect.MaximumIdentifierLength == int.MaxValue)
+        {
+            return;
+        }
+
+        foreach (System.Text.RegularExpressions.Match match in
+                 System.Text.RegularExpressions.Regex.Matches(template, "__PREFIX__[A-Za-z0-9_]*"))
+        {
+            var suffix = match.Value.Substring("__PREFIX__".Length);
+            ValidateLength(prefix + suffix, dialect.MaximumIdentifierLength);
+        }
     }
 
     /// <summary>Splits the script on <c>;</c> into individually executable statements, ignoring empty statements and comment lines.</summary>

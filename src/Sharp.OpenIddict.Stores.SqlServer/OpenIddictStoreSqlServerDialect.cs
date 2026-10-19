@@ -31,6 +31,10 @@ public sealed class OpenIddictStoreSqlServerDialect : IOpenIddictStoreDialect
     public int MaximumParameters => 2_000;
 
     /// <inheritdoc />
+    /// <remarks>SQL Server allows 128 characters for identifiers and rejects anything longer instead of truncating it.</remarks>
+    public int MaximumIdentifierLength => 128;
+
+    /// <inheritdoc />
     public string QuoteIdentifier(string identifier)
         => "[" + OpenIddictStoreIdentifiers.Validate(identifier, nameof(identifier)) + "]";
 

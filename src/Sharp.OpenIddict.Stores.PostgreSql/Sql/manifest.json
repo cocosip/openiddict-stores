@@ -1,0 +1,19 @@
+{
+  "provider": "PostgreSql",
+  "series": "7",
+  "entries": [
+    {
+      "type": "install",
+      "server": "PostgreSQL",
+      "minimumVersion": "14",
+      "state": "available",
+      "rendersTokens": ["__PREFIX__", "__SCHEMA__"],
+      "sourceSeries": null,
+      "sourceVersion": null,
+      "targetSeries": "7",
+      "targetVersion": 1,
+      "path": "7/install/v0001.sql.template",
+      "sha256": "A62305F4631D40CAE74C07044FCCD73D03DA37998114C23D3D6A51ACE90DBC29"
+    }
+  ]
+}

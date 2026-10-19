@@ -23,6 +23,10 @@ public sealed class OpenIddictStoreSqliteDialect : IOpenIddictStoreDialect
     public int MaximumParameters => 900;
 
     /// <inheritdoc />
+    /// <remarks>SQLite accepts identifiers of any length, so only the identifier rules themselves bound a table name.</remarks>
+    public int MaximumIdentifierLength => int.MaxValue;
+
+    /// <inheritdoc />
     public string QuoteIdentifier(string identifier)
         => "\"" + OpenIddictStoreIdentifiers.Validate(identifier, nameof(identifier)) + "\"";
 

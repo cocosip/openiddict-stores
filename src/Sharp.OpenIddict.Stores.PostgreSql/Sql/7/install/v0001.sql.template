@@ -1,0 +1,169 @@
+-- Sharp.OpenIddict.Stores — PostgreSQL 7 / v0001 install script TEMPLATE
+-- This file is not executable as-is: the prefix and schema placeholders must be rendered first (see Sql/README.md).
+-- Target: PostgreSQL 14 or later; install into a new schema (public by default).
+-- Source version: none (install script); target: Series 7 / Version 1.
+-- Transaction boundary: the whole script runs in one transaction (PostgreSQL DDL is transactional); any
+--   failing statement leaves no structures behind.
+-- Identifiers: the prefix placeholder becomes the configured table prefix (default OpenIddict) and the schema
+--   placeholder becomes the quoted schema including the trailing dot, or nothing for the default schema.
+--   Table and column names are always double-quoted, because PostgreSQL folds unquoted names to lower case
+--   and the runtime quotes them, so an unquoted DDL would create tables the Store cannot find.
+-- Exact comparisons: every column the Store compares exactly (ids, keys, status, subject, type, and the
+--   auxiliary collection values) is declared COLLATE "C". C is built into every database and compares
+--   byte-wise, so case, accents, and trailing spaces stay significant whatever the database default is;
+--   the dialect can then use a plain = and still match the design 16.1.1 contract.
+-- Deletion: every foreign key is NO ACTION; the Store performs the associated deletes explicitly (design 16.2.1).
+-- Re-run behaviour: there is no IF EXISTS skip. A second run fails on the first duplicate relation and the
+--   transaction rolls back, which is how an accidental re-run is refused (design 10.3).
+
+BEGIN;
+
+CREATE TABLE __SCHEMA__"__PREFIX__Applications" (
+    "Id" varchar(100) COLLATE "C" NOT NULL,
+    "ConcurrencyToken" varchar(50) COLLATE "C" NOT NULL,
+    "ApplicationType" varchar(50) NULL,
+    "ClientId" varchar(100) COLLATE "C" NULL,
+    "ClientSecret" text NULL,
+    "ClientType" varchar(50) NULL,
+    "ConsentType" varchar(50) NULL,
+    "DisplayName" text NULL,
+    "DisplayNames" text NULL,
+    "JsonWebKeySet" text NULL,
+    "Permissions" text NULL,
+    "PostLogoutRedirectUris" text NULL,
+    "Properties" text NULL,
+    "RedirectUris" text NULL,
+    "Requirements" text NULL,
+    "Settings" text NULL,
+    CONSTRAINT "PK___PREFIX__Applications" PRIMARY KEY ("Id")
+);
+
+CREATE TABLE __SCHEMA__"__PREFIX__Authorizations" (
+    "Id" varchar(100) COLLATE "C" NOT NULL,
+    "ConcurrencyToken" varchar(50) COLLATE "C" NOT NULL,
+    "ApplicationId" varchar(100) COLLATE "C" NULL,
+    "CreationDate" timestamp(6) without time zone NULL,
+    "Properties" text NULL,
+    "Scopes" text NULL,
+    "Status" varchar(50) COLLATE "C" NULL,
+    "Subject" varchar(400) COLLATE "C" NULL,
+    "Type" varchar(50) COLLATE "C" NULL,
+    CONSTRAINT "PK___PREFIX__Authorizations" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK___PREFIX__Authorizations_App"
+        FOREIGN KEY ("ApplicationId") REFERENCES __SCHEMA__"__PREFIX__Applications" ("Id")
+);
+
+CREATE TABLE __SCHEMA__"__PREFIX__Scopes" (
+    "Id" varchar(100) COLLATE "C" NOT NULL,
+    "ConcurrencyToken" varchar(50) COLLATE "C" NOT NULL,
+    "Description" text NULL,
+    "Descriptions" text NULL,
+    "DisplayName" text NULL,
+    "DisplayNames" text NULL,
+    "Name" varchar(200) COLLATE "C" NULL,
+    "Properties" text NULL,
+    "Resources" text NULL,
+    CONSTRAINT "PK___PREFIX__Scopes" PRIMARY KEY ("Id")
+);
+
+CREATE TABLE __SCHEMA__"__PREFIX__Tokens" (
+    "Id" varchar(100) COLLATE "C" NOT NULL,
+    "ConcurrencyToken" varchar(50) COLLATE "C" NOT NULL,
+    "ApplicationId" varchar(100) COLLATE "C" NULL,
+    "AuthorizationId" varchar(100) COLLATE "C" NULL,
+    "CreationDate" timestamp(6) without time zone NULL,
+    "ExpirationDate" timestamp(6) without time zone NULL,
+    "Payload" text NULL,
+    "Properties" text NULL,
+    "RedemptionDate" timestamp(6) without time zone NULL,
+    "ReferenceId" varchar(100) COLLATE "C" NULL,
+    "Status" varchar(50) COLLATE "C" NULL,
+    "Subject" varchar(400) COLLATE "C" NULL,
+    "Type" varchar(150) COLLATE "C" NULL,
+    CONSTRAINT "PK___PREFIX__Tokens" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK___PREFIX__Tokens_App"
+        FOREIGN KEY ("ApplicationId") REFERENCES __SCHEMA__"__PREFIX__Applications" ("Id"),
+    CONSTRAINT "FK___PREFIX__Tokens_Authz"
+        FOREIGN KEY ("AuthorizationId") REFERENCES __SCHEMA__"__PREFIX__Authorizations" ("Id")
+);
+
+CREATE TABLE __SCHEMA__"__PREFIX__ApplicationRedirectUris" (
+    "ApplicationId" varchar(100) COLLATE "C" NOT NULL,
+    "UriHash" bytea NOT NULL,
+    "Uri" text COLLATE "C" NOT NULL,
+    "Position" integer NOT NULL,
+    CONSTRAINT "PK___PREFIX__AppRedirectUris" PRIMARY KEY ("ApplicationId", "Position"),
+    CONSTRAINT "FK___PREFIX__AppRedirectUris_App"
+        FOREIGN KEY ("ApplicationId") REFERENCES __SCHEMA__"__PREFIX__Applications" ("Id")
+);
+
+CREATE TABLE __SCHEMA__"__PREFIX__ApplicationPostLogoutRedirectUris" (
+    "ApplicationId" varchar(100) COLLATE "C" NOT NULL,
+    "UriHash" bytea NOT NULL,
+    "Uri" text COLLATE "C" NOT NULL,
+    "Position" integer NOT NULL,
+    CONSTRAINT "PK___PREFIX__AppPostLogoutUris" PRIMARY KEY ("ApplicationId", "Position"),
+    CONSTRAINT "FK___PREFIX__AppPostLogoutUris_App"
+        FOREIGN KEY ("ApplicationId") REFERENCES __SCHEMA__"__PREFIX__Applications" ("Id")
+);
+
+CREATE TABLE __SCHEMA__"__PREFIX__AuthorizationScopes" (
+    "AuthorizationId" varchar(100) COLLATE "C" NOT NULL,
+    "ScopeHash" bytea NOT NULL,
+    "Scope" text COLLATE "C" NOT NULL,
+    "Position" integer NOT NULL,
+    CONSTRAINT "PK___PREFIX__AuthScopes" PRIMARY KEY ("AuthorizationId", "Position"),
+    CONSTRAINT "FK___PREFIX__AuthScopes_Authz"
+        FOREIGN KEY ("AuthorizationId") REFERENCES __SCHEMA__"__PREFIX__Authorizations" ("Id")
+);
+
+CREATE TABLE __SCHEMA__"__PREFIX__ScopeResources" (
+    "ScopeId" varchar(100) COLLATE "C" NOT NULL,
+    "ResourceHash" bytea NOT NULL,
+    "Resource" text COLLATE "C" NOT NULL,
+    "Position" integer NOT NULL,
+    CONSTRAINT "PK___PREFIX__ScopeResources" PRIMARY KEY ("ScopeId", "Position"),
+    CONSTRAINT "FK___PREFIX__ScopeResources_Scope"
+        FOREIGN KEY ("ScopeId") REFERENCES __SCHEMA__"__PREFIX__Scopes" ("Id")
+);
+
+CREATE TABLE __SCHEMA__"__PREFIX__SchemaVersions" (
+    "Series" varchar(10) COLLATE "C" NOT NULL,
+    "Version" integer NOT NULL,
+    "UpdatedUtc" timestamp(6) without time zone NOT NULL,
+    CONSTRAINT "PK___PREFIX__SchemaVersions" PRIMARY KEY ("Series")
+);
+
+-- Unique keys: PostgreSQL already treats NULLs as distinct in a unique index, so no filtered index is
+-- needed to allow many NULLs (design 7, 15.4). The C collation keeps trailing spaces significant.
+CREATE UNIQUE INDEX "UK___PREFIX__Applications_ClientId" ON __SCHEMA__"__PREFIX__Applications" ("ClientId");
+CREATE UNIQUE INDEX "UK___PREFIX__Scopes_Name" ON __SCHEMA__"__PREFIX__Scopes" ("Name");
+CREATE UNIQUE INDEX "UK___PREFIX__Tokens_ReferenceId" ON __SCHEMA__"__PREFIX__Tokens" ("ReferenceId");
+
+-- Main table indexes (design 15.4).
+CREATE INDEX "IX___PREFIX__Authz_App_Status_Subj_Type"
+    ON __SCHEMA__"__PREFIX__Authorizations" ("ApplicationId", "Status", "Subject", "Type");
+CREATE INDEX "IX___PREFIX__Authorizations_Subject" ON __SCHEMA__"__PREFIX__Authorizations" ("Subject");
+CREATE INDEX "IX___PREFIX__Authorizations_CreationDate" ON __SCHEMA__"__PREFIX__Authorizations" ("CreationDate");
+
+CREATE INDEX "IX___PREFIX__Token_App_Status_Subj_Type"
+    ON __SCHEMA__"__PREFIX__Tokens" ("ApplicationId", "Status", "Subject", "Type");
+CREATE INDEX "IX___PREFIX__Tokens_AuthorizationId" ON __SCHEMA__"__PREFIX__Tokens" ("AuthorizationId");
+CREATE INDEX "IX___PREFIX__Tokens_Subject" ON __SCHEMA__"__PREFIX__Tokens" ("Subject");
+CREATE INDEX "IX___PREFIX__Tokens_CreationDate" ON __SCHEMA__"__PREFIX__Tokens" ("CreationDate");
+CREATE INDEX "IX___PREFIX__Tokens_ExpirationDate" ON __SCHEMA__"__PREFIX__Tokens" ("ExpirationDate");
+
+-- Auxiliary table candidate indexes: hashes only narrow the candidates, the final check uses the full value with Ordinal comparison (design 15.3).
+CREATE INDEX "IX___PREFIX__AppRedirectUris_Hash"
+    ON __SCHEMA__"__PREFIX__ApplicationRedirectUris" ("UriHash", "ApplicationId");
+CREATE INDEX "IX___PREFIX__AppPostLogoutUris_Hash"
+    ON __SCHEMA__"__PREFIX__ApplicationPostLogoutRedirectUris" ("UriHash", "ApplicationId");
+CREATE INDEX "IX___PREFIX__AuthScopes_ScopeHash"
+    ON __SCHEMA__"__PREFIX__AuthorizationScopes" ("ScopeHash", "AuthorizationId");
+CREATE INDEX "IX___PREFIX__ScopeResources_Hash"
+    ON __SCHEMA__"__PREFIX__ScopeResources" ("ResourceHash", "ScopeId");
+
+INSERT INTO __SCHEMA__"__PREFIX__SchemaVersions" ("Series", "Version", "UpdatedUtc")
+VALUES ('7', 1, (now() AT TIME ZONE 'UTC')::timestamp(6));
+
+COMMIT;
