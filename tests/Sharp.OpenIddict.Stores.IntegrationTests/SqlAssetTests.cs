@@ -98,6 +98,29 @@ public sealed class SqlAssetTests
         }
     }
 
+    /// <summary>
+    /// The runtime refuses to operate unless the installed version matches, so the constant it compares
+    /// against and the version the shipped manifest targets must not drift apart (design 10.2, 17).
+    /// </summary>
+    [Theory]
+    [InlineData("Sqlite")]
+    [InlineData("SqlServer")]
+    [InlineData("PostgreSql")]
+    public void Manifest_TargetsTheVersionTheRuntimeRequires(string provider)
+    {
+        var manifestPath = Path.Combine(RepositoryRoot, "src", $"Sharp.OpenIddict.Stores.{provider}", "Sql", "manifest.json");
+
+        using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
+
+        Assert.Equal(OpenIddictStoreSchema.RequiredSeries, document.RootElement.GetProperty("series").GetString());
+
+        var install = document.RootElement.GetProperty("entries").EnumerateArray()
+            .Single(entry => entry.GetProperty("type").GetString() == "install");
+
+        Assert.Equal(OpenIddictStoreSchema.RequiredSeries, install.GetProperty("targetSeries").GetString());
+        Assert.Equal(OpenIddictStoreSchema.RequiredVersion, install.GetProperty("targetVersion").GetInt32());
+    }
+
     [Theory]
     [MemberData(nameof(Providers))]
     public void Manifest_EntriesMatchFilesAndDigests(string provider)

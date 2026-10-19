@@ -20,6 +20,9 @@ public abstract class OpenIddictStoreBase
     private readonly IOpenIddictStoreConnectionFactory _connectionFactory;
     private readonly IOpenIddictStoreDialect _dialect;
 
+    /// <summary>Lazily created so a store that is resolved but never used opens no connection.</summary>
+    private OpenIddictStoreSchemaVersionGuard? _schemaVersion;
+
     /// <summary>Creates the store from its dependencies.</summary>
     protected OpenIddictStoreBase(
         IOptions<OpenIddictStoreOptions> options,
@@ -45,10 +48,26 @@ public abstract class OpenIddictStoreBase
     /// <summary>Table names and schema.</summary>
     internal OpenIddictStoreSchema Schema => new(Options.TablePrefix, Options.Schema);
 
-    /// <summary>Creates a one-shot session (a new connection). The caller must dispose it.</summary>
-    internal ValueTask<OpenIddictStoreSession> CreateSessionAsync(CancellationToken cancellationToken)
-        => OpenIddictStoreSession.CreateAsync(
-            _connectionFactory, _dialect, Schema, Options.CommandTimeout, cancellationToken);
+    /// <summary>
+    /// Creates a one-shot session (a new connection). The caller must dispose it. The schema version is
+    /// verified before the first session this store configuration opens, so an incompatible database is
+    /// rejected before any read or write touches it (design 17).
+    /// </summary>
+    internal async ValueTask<OpenIddictStoreSession> CreateSessionAsync(CancellationToken cancellationToken)
+    {
+        await SchemaVersion.EnsureVerifiedAsync(cancellationToken).ConfigureAwait(false);
+
+        return await OpenIddictStoreSession.CreateAsync(
+            _connectionFactory, _dialect, Schema, Options.CommandTimeout, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The version guard for this configuration. It is created lazily and kept on the store instance, which is
+    /// Scoped, so the verified flag lives for exactly one store configuration.
+    /// </summary>
+    private OpenIddictStoreSchemaVersionGuard SchemaVersion
+        => _schemaVersion ??= new OpenIddictStoreSchemaVersionGuard(
+            Schema, _dialect, _connectionFactory, Options.CommandTimeout);
 
     /// <summary>Quotes a table name, including the schema when necessary.</summary>
     protected string Table(string name)
