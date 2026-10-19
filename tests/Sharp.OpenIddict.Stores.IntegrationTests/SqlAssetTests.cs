@@ -106,6 +106,7 @@ public sealed class SqlAssetTests
     [InlineData("Sqlite")]
     [InlineData("SqlServer")]
     [InlineData("PostgreSql")]
+    [InlineData("MySql")]
     public void Manifest_TargetsTheVersionTheRuntimeRequires(string provider)
     {
         var manifestPath = Path.Combine(RepositoryRoot, "src", $"Sharp.OpenIddict.Stores.{provider}", "Sql", "manifest.json");
@@ -114,11 +115,19 @@ public sealed class SqlAssetTests
 
         Assert.Equal(OpenIddictStoreSchema.RequiredSeries, document.RootElement.GetProperty("series").GetString());
 
-        var install = document.RootElement.GetProperty("entries").EnumerateArray()
-            .Single(entry => entry.GetProperty("type").GetString() == "install");
+        // One provider can ship several entries: MySQL and MariaDB share a file but are listed and accepted
+        // separately (design 10.1), so every install entry has to target the version the runtime requires.
+        var installs = document.RootElement.GetProperty("entries").EnumerateArray()
+            .Where(entry => entry.GetProperty("type").GetString() == "install")
+            .ToList();
 
-        Assert.Equal(OpenIddictStoreSchema.RequiredSeries, install.GetProperty("targetSeries").GetString());
-        Assert.Equal(OpenIddictStoreSchema.RequiredVersion, install.GetProperty("targetVersion").GetInt32());
+        Assert.NotEmpty(installs);
+
+        foreach (var install in installs)
+        {
+            Assert.Equal(OpenIddictStoreSchema.RequiredSeries, install.GetProperty("targetSeries").GetString());
+            Assert.Equal(OpenIddictStoreSchema.RequiredVersion, install.GetProperty("targetVersion").GetInt32());
+        }
     }
 
     [Theory]

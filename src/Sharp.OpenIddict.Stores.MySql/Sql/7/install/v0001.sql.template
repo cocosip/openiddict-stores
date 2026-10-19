@@ -1,0 +1,164 @@
+-- Sharp.OpenIddict.Stores — MySQL 8 / MariaDB 10.6 install script TEMPLATE
+-- This file is not executable as-is: the prefix placeholder must be rendered first (see Sql/README.md).
+-- Target: MySQL 8.0+ and MariaDB 10.6+, InnoDB, utf8mb4.
+-- Source version: none (install script); target: Series 7 / Version 1.
+-- Transaction boundary: MySQL and MariaDB commit DDL implicitly, so this script has NO surrounding
+--   transaction and cannot roll back as a whole. Each statement commits on success; a failure stops the run
+--   part-way and leaves the objects already created in place. Diagnose by listing the existing objects and the
+--   version record, finish or restore manually, then re-run only after the target is clean again (design 10.3).
+-- Identifiers: the prefix placeholder becomes the configured table prefix (default OpenIddict). Every table,
+--   column, index, and constraint name is backtick-quoted, because MySQL reserves words such as Position.
+-- Exact comparisons: the runtime adds the BINARY operator to every string predicate, so case and trailing
+--   spaces are significant regardless of the collation. The tables still declare utf8mb4_bin because it is
+--   the one binary collation both MySQL 8 and MariaDB 10.6 provide; note that _bin is PAD SPACE, so a UNIQUE
+--   index can treat 'client' and 'client ' as duplicates. That is a physical limit of the index, reported as a
+--   conflict rather than hidden by trimming (design 16.1.1); predicates themselves stay exact.
+-- Deletion: every foreign key is NO ACTION/RESTRICT; the Store performs the associated deletes explicitly.
+
+CREATE TABLE `__PREFIX__Applications` (
+    `Id` varchar(100) NOT NULL,
+    `ConcurrencyToken` varchar(50) NOT NULL,
+    `ApplicationType` varchar(50) NULL,
+    `ClientId` varchar(100) NULL,
+    `ClientSecret` longtext NULL,
+    `ClientType` varchar(50) NULL,
+    `ConsentType` varchar(50) NULL,
+    `DisplayName` longtext NULL,
+    `DisplayNames` longtext NULL,
+    `JsonWebKeySet` longtext NULL,
+    `Permissions` longtext NULL,
+    `PostLogoutRedirectUris` longtext NULL,
+    `Properties` longtext NULL,
+    `RedirectUris` longtext NULL,
+    `Requirements` longtext NULL,
+    `Settings` longtext NULL,
+    CONSTRAINT `PK___PREFIX__Applications` PRIMARY KEY (`Id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC;
+
+CREATE TABLE `__PREFIX__Authorizations` (
+    `Id` varchar(100) NOT NULL,
+    `ConcurrencyToken` varchar(50) NOT NULL,
+    `ApplicationId` varchar(100) NULL,
+    `CreationDate` datetime(6) NULL,
+    `Properties` longtext NULL,
+    `Scopes` longtext NULL,
+    `Status` varchar(50) NULL,
+    `Subject` varchar(400) NULL,
+    `Type` varchar(50) NULL,
+    CONSTRAINT `PK___PREFIX__Authorizations` PRIMARY KEY (`Id`),
+    CONSTRAINT `FK___PREFIX__Authorizations_App` FOREIGN KEY (`ApplicationId`)
+        REFERENCES `__PREFIX__Applications` (`Id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC;
+
+CREATE TABLE `__PREFIX__Scopes` (
+    `Id` varchar(100) NOT NULL,
+    `ConcurrencyToken` varchar(50) NOT NULL,
+    `Description` longtext NULL,
+    `Descriptions` longtext NULL,
+    `DisplayName` longtext NULL,
+    `DisplayNames` longtext NULL,
+    `Name` varchar(200) NULL,
+    `Properties` longtext NULL,
+    `Resources` longtext NULL,
+    CONSTRAINT `PK___PREFIX__Scopes` PRIMARY KEY (`Id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC;
+
+CREATE TABLE `__PREFIX__Tokens` (
+    `Id` varchar(100) NOT NULL,
+    `ConcurrencyToken` varchar(50) NOT NULL,
+    `ApplicationId` varchar(100) NULL,
+    `AuthorizationId` varchar(100) NULL,
+    `CreationDate` datetime(6) NULL,
+    `ExpirationDate` datetime(6) NULL,
+    `Payload` longtext NULL,
+    `Properties` longtext NULL,
+    `RedemptionDate` datetime(6) NULL,
+    `ReferenceId` varchar(100) NULL,
+    `Status` varchar(50) NULL,
+    `Subject` varchar(400) NULL,
+    `Type` varchar(150) NULL,
+    CONSTRAINT `PK___PREFIX__Tokens` PRIMARY KEY (`Id`),
+    CONSTRAINT `FK___PREFIX__Tokens_App` FOREIGN KEY (`ApplicationId`)
+        REFERENCES `__PREFIX__Applications` (`Id`),
+    CONSTRAINT `FK___PREFIX__Tokens_Authz` FOREIGN KEY (`AuthorizationId`)
+        REFERENCES `__PREFIX__Authorizations` (`Id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC;
+
+CREATE TABLE `__PREFIX__ApplicationRedirectUris` (
+    `ApplicationId` varchar(100) NOT NULL,
+    `UriHash` binary(32) NOT NULL,
+    `Uri` longtext NOT NULL,
+    `Position` int NOT NULL,
+    CONSTRAINT `PK___PREFIX__AppRedirectUris` PRIMARY KEY (`ApplicationId`, `Position`),
+    CONSTRAINT `FK___PREFIX__AppRedirectUris_App` FOREIGN KEY (`ApplicationId`)
+        REFERENCES `__PREFIX__Applications` (`Id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC;
+
+CREATE TABLE `__PREFIX__ApplicationPostLogoutRedirectUris` (
+    `ApplicationId` varchar(100) NOT NULL,
+    `UriHash` binary(32) NOT NULL,
+    `Uri` longtext NOT NULL,
+    `Position` int NOT NULL,
+    CONSTRAINT `PK___PREFIX__AppPostLogoutUris` PRIMARY KEY (`ApplicationId`, `Position`),
+    CONSTRAINT `FK___PREFIX__AppPostLogoutUris_App` FOREIGN KEY (`ApplicationId`)
+        REFERENCES `__PREFIX__Applications` (`Id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC;
+
+CREATE TABLE `__PREFIX__AuthorizationScopes` (
+    `AuthorizationId` varchar(100) NOT NULL,
+    `ScopeHash` binary(32) NOT NULL,
+    `Scope` longtext NOT NULL,
+    `Position` int NOT NULL,
+    CONSTRAINT `PK___PREFIX__AuthScopes` PRIMARY KEY (`AuthorizationId`, `Position`),
+    CONSTRAINT `FK___PREFIX__AuthScopes_Authz` FOREIGN KEY (`AuthorizationId`)
+        REFERENCES `__PREFIX__Authorizations` (`Id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC;
+
+CREATE TABLE `__PREFIX__ScopeResources` (
+    `ScopeId` varchar(100) NOT NULL,
+    `ResourceHash` binary(32) NOT NULL,
+    `Resource` longtext NOT NULL,
+    `Position` int NOT NULL,
+    CONSTRAINT `PK___PREFIX__ScopeResources` PRIMARY KEY (`ScopeId`, `Position`),
+    CONSTRAINT `FK___PREFIX__ScopeResources_Scope` FOREIGN KEY (`ScopeId`)
+        REFERENCES `__PREFIX__Scopes` (`Id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC;
+
+CREATE TABLE `__PREFIX__SchemaVersions` (
+    `Series` varchar(10) NOT NULL,
+    `Version` int NOT NULL,
+    `UpdatedUtc` datetime(6) NOT NULL,
+    CONSTRAINT `PK___PREFIX__SchemaVersions` PRIMARY KEY (`Series`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC;
+
+-- Unique keys: MySQL and MariaDB both allow any number of NULLs in a UNIQUE index, so no partial index is
+-- needed (design 7, 15.4). The trailing-space caveat of PAD SPACE collations is documented above.
+CREATE UNIQUE INDEX `UK___PREFIX__Applications_ClientId` ON `__PREFIX__Applications` (`ClientId`);
+CREATE UNIQUE INDEX `UK___PREFIX__Scopes_Name` ON `__PREFIX__Scopes` (`Name`);
+CREATE UNIQUE INDEX `UK___PREFIX__Tokens_ReferenceId` ON `__PREFIX__Tokens` (`ReferenceId`);
+
+-- Main table indexes (design 15.4).
+CREATE INDEX `IX___PREFIX__Authz_App_Status_Subj_Type`
+    ON `__PREFIX__Authorizations` (`ApplicationId`, `Status`, `Subject`, `Type`);
+CREATE INDEX `IX___PREFIX__Authorizations_Subject` ON `__PREFIX__Authorizations` (`Subject`);
+CREATE INDEX `IX___PREFIX__Authorizations_CreationDate` ON `__PREFIX__Authorizations` (`CreationDate`);
+
+CREATE INDEX `IX___PREFIX__Token_App_Status_Subj_Type`
+    ON `__PREFIX__Tokens` (`ApplicationId`, `Status`, `Subject`, `Type`);
+CREATE INDEX `IX___PREFIX__Tokens_AuthorizationId` ON `__PREFIX__Tokens` (`AuthorizationId`);
+CREATE INDEX `IX___PREFIX__Tokens_Subject` ON `__PREFIX__Tokens` (`Subject`);
+CREATE INDEX `IX___PREFIX__Tokens_CreationDate` ON `__PREFIX__Tokens` (`CreationDate`);
+CREATE INDEX `IX___PREFIX__Tokens_ExpirationDate` ON `__PREFIX__Tokens` (`ExpirationDate`);
+
+-- Auxiliary table candidate indexes: hashes only narrow the candidates, the final check uses the full value with Ordinal comparison (design 15.3).
+CREATE INDEX `IX___PREFIX__AppRedirectUris_Hash`
+    ON `__PREFIX__ApplicationRedirectUris` (`UriHash`, `ApplicationId`);
+CREATE INDEX `IX___PREFIX__AppPostLogoutUris_Hash`
+    ON `__PREFIX__ApplicationPostLogoutRedirectUris` (`UriHash`, `ApplicationId`);
+CREATE INDEX `IX___PREFIX__AuthScopes_ScopeHash`
+    ON `__PREFIX__AuthorizationScopes` (`ScopeHash`, `AuthorizationId`);
+CREATE INDEX `IX___PREFIX__ScopeResources_Hash`
+    ON `__PREFIX__ScopeResources` (`ResourceHash`, `ScopeId`);
+
+INSERT INTO `__PREFIX__SchemaVersions` (`Series`, `Version`, `UpdatedUtc`)
+VALUES ('7', 1, UTC_TIMESTAMP(6));

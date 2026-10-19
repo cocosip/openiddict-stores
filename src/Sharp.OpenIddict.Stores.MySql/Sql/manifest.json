@@ -1,0 +1,32 @@
+{
+  "provider": "MySql",
+  "series": "7",
+  "entries": [
+    {
+      "type": "install",
+      "server": "MySQL",
+      "minimumVersion": "8.0",
+      "state": "available",
+      "rendersTokens": ["__PREFIX__"],
+      "sourceSeries": null,
+      "sourceVersion": null,
+      "targetSeries": "7",
+      "targetVersion": 1,
+      "path": "7/install/v0001.sql.template",
+      "sha256": "576C8E122A2988C2FFDB2BA77928A9EDCF19389D200EAE27B6FB5839C6D23F9B"
+    },
+    {
+      "type": "install",
+      "server": "MariaDB",
+      "minimumVersion": "10.6",
+      "state": "available",
+      "rendersTokens": ["__PREFIX__"],
+      "sourceSeries": null,
+      "sourceVersion": null,
+      "targetSeries": "7",
+      "targetVersion": 1,
+      "path": "7/install/v0001.sql.template",
+      "sha256": "576C8E122A2988C2FFDB2BA77928A9EDCF19389D200EAE27B6FB5839C6D23F9B"
+    }
+  ]
+}
