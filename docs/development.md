@@ -603,7 +603,7 @@ dotnet pack Sharp.OpenIddict.Stores.slnx --configuration Release --no-build --ou
 ### E-026：SQL Server 方言、安装脚本与执行层去 Dapper
 
 - 任务：DB-02（SQL Server 方言与真库验收）、ENG-03（执行层改造）；系列：7.7.2。
-- 日期：2026-10-19；实现提交：`0604d4b`（执行层去 Dapper）、`49d6933`（SQL Server provider 与验收）。
+- 日期：2026-10-19；实现提交：`0604d4b`（执行层去 Dapper）、`49d6933`（SQL Server provider 与验收）；本文档记录提交 `f34e957`。
 - 产物：`src/Sharp.OpenIddict.Stores.SqlServer/`（`OpenIddictStoreSqlServerDialect.cs`、`OpenIddictStoreSqlServerBuilderExtensions.cs`、`Sql/7/install/v0001.sql`、`Sql/manifest.json`、`Sql/README.md`）；`src/Sharp.OpenIddict.Stores/OpenIddictStoreCommands.cs`（新增 ADO.NET 执行层）；`tests/Sharp.OpenIddict.Stores.IntegrationTests/SqlServerStoreContractTests.cs`（15 项）、`ServerFactAttribute.cs`；`OpenIddictStoreCoreBuilderExtensions.cs` 新增 `UseStores()` 并把 `UseDapper()` 降级为 `[Obsolete]` 别名。
 - 原因一（执行层）：核心包 nuspec 的五个 TFM 依赖组都带着 `Dapper 2.1.89`，消费者安装即被强制拉入该依赖，与包名 `Stores` 的定位不符。实测该依赖只出现在 `OpenIddictStoreSession` 一个类型的 8 处调用，替换面收敛，因此改为直接使用 `DbCommand`/`DbParameter`/`DbDataReader`，并删除 `Directory.Packages.props` 中的版本项。
 - 原因二（方言）：SQL Server 的精确比较、可空唯一键、分页语法与日期精度都不能照抄 SQLite 实现。
