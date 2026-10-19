@@ -11,6 +11,7 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 *.http text eol=lf
+*.ps1 text eol=lf
 
 *.png binary
 *.jpg binary
