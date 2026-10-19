@@ -106,16 +106,22 @@ public sealed class SqlServerStoreContractTests : IAsyncLifetime
         await drop.ExecuteNonQueryAsync();
     }
 
-    /// <summary>Runs the shipped script the way a deployment would: prefix substitution, then one statement per command.</summary>
-    private async Task ExecuteInstallScriptAsync()
+    /// <summary>Runs the rendered deployment copy the way a deployment would: render, then one statement per command.</summary>
+    private async Task ExecuteInstallScriptAsync(string prefix = DeploymentScript.DefaultPrefix, string? schema = null)
     {
-        var script = OpenIddictStoreIdentifiers.ApplyPrefix(
-            await File.ReadAllTextAsync(Path.Combine(RepositoryRoot,
-                "src", "Sharp.OpenIddict.Stores.SqlServer", "Sql", "7", "install", "v0001.sql")),
-            "OpenIddict");
+        var script = DeploymentScript.SqlServer(prefix, schema);
 
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync();
+
+        if (!string.IsNullOrEmpty(schema))
+        {
+            // The script does not create the schema; a deployment creates it first (see Sql/README.md).
+            await using var create = connection.CreateCommand();
+            create.CommandText =
+                $"IF SCHEMA_ID(N'{schema}') IS NULL EXEC(N'CREATE SCHEMA {OpenIddictStoreSqlServerDialect.Instance.QuoteIdentifier(schema!)}');";
+            await create.ExecuteNonQueryAsync();
+        }
 
         foreach (var statement in OpenIddictStoreIdentifiers.SplitStatements(script))
         {
@@ -168,10 +174,67 @@ public sealed class SqlServerStoreContractTests : IAsyncLifetime
     [ServerFact(ServerVariable, "The SQL Server acceptance suite")]
     public async Task ReRunningTheInstallScript_IsRefusedInsteadOfSkipped()
     {
-        var exception = await Record.ExceptionAsync(ExecuteInstallScriptAsync);
+        var exception = await Record.ExceptionAsync(() => ExecuteInstallScriptAsync());
 
         Assert.NotNull(exception);
         Assert.Contains("already installed", exception!.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The prefix and schema are runtime configuration, so a deployment copy rendered with custom values must
+    /// produce a complete schema under that name and be usable through a store configured the same way.
+    /// </summary>
+    [ServerFact(ServerVariable, "The SQL Server acceptance suite")]
+    public async Task CustomPrefixAndSchema_InstallAndAreUsable()
+    {
+        // The fixture already installed dbo.OpenIddict*, so this copy goes to a different schema with a
+        // different prefix in the same database: a collision would prove the rendering leaked somewhere.
+        await ExecuteInstallScriptAsync("Oidc", "auth");
+
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+
+        await using (var reads = connection.CreateCommand())
+        {
+            reads.CommandText =
+                "SELECT COUNT(*) FROM sys.tables WHERE schema_id = SCHEMA_ID(N'auth') AND name LIKE N'Oidc%'";
+            Assert.Equal(9, (int)(await reads.ExecuteScalarAsync())!);
+        }
+
+        await using (var reads = connection.CreateCommand())
+        {
+            // Nothing may appear under the default prefix or in dbo because of this second copy.
+            reads.CommandText =
+                "SELECT COUNT(*) FROM sys.tables WHERE name LIKE N'OpenIddict%' AND schema_id <> SCHEMA_ID(N'dbo')";
+            Assert.Equal(0, (int)(await reads.ExecuteScalarAsync())!);
+        }
+
+        await using (var reads = connection.CreateCommand())
+        {
+            reads.CommandText = "SELECT Version FROM auth.OidcSchemaVersions WHERE Series = N'7'";
+            Assert.Equal(1, (int)(await reads.ExecuteScalarAsync())!);
+        }
+
+        var options = Options.Create(new OpenIddictStoreOptions { TablePrefix = "Oidc", Schema = "auth" });
+        options.Value.Providers.Add(OpenIddictStoreProvider.SqlServer);
+
+        var store = new OpenIddictStoreApplicationStore<OpenIddictStoreApplication>(
+            options,
+            new SqlServerConnectionFactory(_connectionString),
+            OpenIddictStoreSqlServerDialect.Instance,
+            NullLogger<OpenIddictStoreApplicationStore<OpenIddictStoreApplication>>.Instance);
+
+        var application = new OpenIddictStoreApplication { ClientId = "custom-prefix" };
+        await store.CreateAsync(application, default);
+
+        Assert.NotNull(await store.FindByClientIdAsync("custom-prefix", default));
+
+        // The guard has to look at the schema-qualified name too, or a second run would create half the tables
+        // and only fail on the first duplicate.
+        var again = await Record.ExceptionAsync(() => ExecuteInstallScriptAsync("Oidc", "auth"));
+
+        Assert.NotNull(again);
+        Assert.Contains("already installed", again!.Message, StringComparison.Ordinal);
     }
 
     [ServerFact(ServerVariable, "The SQL Server acceptance suite")]
@@ -553,21 +616,6 @@ public sealed class SqlServerStoreContractTests : IAsyncLifetime
         }
 
         return results;
-    }
-
-    private static string RepositoryRoot { get; } = LocateRepositoryRoot();
-
-    private static string LocateRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Sharp.OpenIddict.Stores.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
-        return directory?.FullName
-            ?? throw new InvalidOperationException("Could not locate the repository root (Sharp.OpenIddict.Stores.slnx).");
     }
 
     private sealed class SqlServerConnectionFactory : IOpenIddictStoreConnectionFactory

@@ -4,14 +4,20 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Sharp.OpenIddict.Stores;
+using Sharp.OpenIddict.Stores.Models;
+using Sharp.OpenIddict.Stores.Sqlite;
+using Sharp.OpenIddict.Stores.Stores;
 using Xunit;
 
 namespace Sharp.OpenIddict.Stores.IntegrationTests;
 
 /// <summary>
-/// Install script acceptance from design 10: actually execute the shipped script on a temporary SQLite file,
-/// verifying tables, constraints, indexes, and the schema version record without ad-hoc DDL.
+/// Install script acceptance from design 10: render a deployment copy from the shipped template, execute it on
+/// a temporary SQLite file, and verify tables, constraints, indexes, and the schema version record without
+/// ad-hoc DDL. A non-default prefix is covered because the prefix is runtime configuration.
 /// </summary>
 public sealed class SqliteInstallScriptTests : IAsyncLifetime
 {
@@ -149,20 +155,66 @@ public sealed class SqliteInstallScriptTests : IAsyncLifetime
     }
 
     [Fact]
-    public void InstallScript_UsesOnlyValidatedPrefixPlaceholders()
+    public void InstallScript_UsesOnlyValidatedPlaceholders()
     {
-        var script = LoadScript();
+        var template = DeploymentScript.Template("Sqlite");
 
-        Assert.Contains("__PREFIX__", script, StringComparison.Ordinal);
-        Assert.DoesNotContain("OpenIddict\"", script.Replace("__PREFIX__\"", string.Empty, StringComparison.Ordinal),
-            StringComparison.Ordinal);
+        Assert.Contains("__PREFIX__", template, StringComparison.Ordinal);
 
-        // Prefix validation matches the runtime: invalid prefixes are rejected before a deployment copy is generated.
-        Assert.Throws<ArgumentException>(() => OpenIddictStoreIdentifiers.ApplyPrefix(script, "1bad"));
-        Assert.Throws<ArgumentException>(() => OpenIddictStoreIdentifiers.ApplyPrefix(script, "bad-prefix"));
+        // A template is not a runnable script: the placeholder cannot survive into a deployment copy.
+        Assert.Throws<ArgumentException>(() => OpenIddictStoreIdentifiers.RenderDeploymentScript(
+            template, OpenIddictStoreSqliteDialect.Instance, "1bad"));
+        Assert.Throws<ArgumentException>(() => OpenIddictStoreIdentifiers.RenderDeploymentScript(
+            template, OpenIddictStoreSqliteDialect.Instance, "bad-prefix"));
 
-        var applied = OpenIddictStoreIdentifiers.ApplyPrefix(script, "Custom");
-        Assert.Contains("CREATE TABLE \"CustomApplications\"", applied, StringComparison.Ordinal);
+        var rendered = DeploymentScript.Sqlite("Custom");
+
+        Assert.Contains("CREATE TABLE \"CustomApplications\"", rendered, StringComparison.Ordinal);
+        Assert.DoesNotContain("__PREFIX__", rendered, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The prefix is runtime configuration, so a non-default prefix must produce a complete, working schema.
+    /// This is the case that a concrete script hard-coded to OpenIddict could not serve.
+    /// </summary>
+    [Fact]
+    public async Task CustomPrefix_InstallsAndIsUsable()
+    {
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = _databasePath,
+            ForeignKeys = true,
+        }.ToString();
+
+        await using (var connection = new SqliteConnection(connectionString))
+        {
+            await connection.OpenAsync();
+            await ExecuteScriptAsync(connection, DeploymentScript.Sqlite("Oidc"));
+
+            var tables = await QueryNamesAsync(connection,
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
+
+            Assert.Contains("OidcApplications", tables);
+            Assert.Contains("OidcSchemaVersions", tables);
+
+            // Nothing may be left under the default prefix: the deployment copy is a complete replacement.
+            Assert.DoesNotContain("OpenIddictApplications", tables);
+        }
+
+        var options = Options.Create(new OpenIddictStoreOptions { TablePrefix = "Oidc" });
+        options.Value.Providers.Add(OpenIddictStoreProvider.Sqlite);
+
+        var store = new OpenIddictStoreApplicationStore<OpenIddictStoreApplication>(
+            options,
+            new SqliteConnectionFactory(connectionString),
+            OpenIddictStoreSqliteDialect.Instance,
+            NullLogger<OpenIddictStoreApplicationStore<OpenIddictStoreApplication>>.Instance);
+
+        // The store has to find the tables it was told to use, not the ones the script happened to create.
+        var application = new OpenIddictStoreApplication { ClientId = "custom-prefix" };
+        await store.CreateAsync(application, default);
+
+        Assert.NotNull(await store.FindByClientIdAsync("custom-prefix", default));
     }
 
     private async Task<SqliteConnection> OpenAndInstallAsync()
@@ -181,8 +233,7 @@ public sealed class SqliteInstallScriptTests : IAsyncLifetime
 
     private static async Task ExecuteScriptAsync(SqliteConnection connection, string script)
     {
-        var statements = OpenIddictStoreIdentifiers.SplitStatements(
-            OpenIddictStoreIdentifiers.ApplyPrefix(script, "OpenIddict"));
+        var statements = OpenIddictStoreIdentifiers.SplitStatements(script);
 
         await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync();
 
@@ -227,22 +278,5 @@ public sealed class SqliteInstallScriptTests : IAsyncLifetime
         return names;
     }
 
-    private static string LoadScript()
-        => File.ReadAllText(Path.Combine(RepositoryRoot,
-            "src", "Sharp.OpenIddict.Stores.Sqlite", "Sql", "7", "install", "v0001.sql"));
-
-    private static string RepositoryRoot { get; } = LocateRepositoryRoot();
-
-    private static string LocateRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Sharp.OpenIddict.Stores.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
-        return directory?.FullName
-            ?? throw new InvalidOperationException("Could not locate the repository root (Sharp.OpenIddict.Stores.slnx).");
-    }
+    private static string LoadScript() => DeploymentScript.Sqlite();
 }

@@ -8,7 +8,7 @@
 
 截至 2026-10-19，已完成源码调研、正式设计编写及走查问题修订，已提交的设计基线为 `982c156`（v1.2）；此后补齐精确比较、查询 NULL 语义、任务依赖、逐数据库 SQL 脚本的交付、版本与持续维护验收，依赖中央包管理与逐 TFM 版本分线规则，并将实施基线改为唯一稳定版 OpenIddict 7.7.2（不再依赖任何预览包），任务清单相应收敛为四类实体、四类 Store 和单系列多目标验证，设计收敛为 v1.9。代码与测试已整体纳入版本控制（E-025），工作区不再积压未跟踪文件。当前共 50 项任务，25 项完成（3 项文档、BASE-01 依赖锁定、BASE-02 合同清单、ENG-01 工程布局、ENG-02 四类模型、COMPAT-01 五目标工程、STORE-01 SQLite 方言与安装脚本、STORE-03 Application/Scope Store、STORE-04 Authorization/Token Store、STORE-05 集合索引、STORE-06 CAS 与原子回滚、LIFE-03 批量撤销、LIFE-04 独立清理、LIFE-01/02 关联删除与竞态、QUERY-01～03 查询翻译、STORE-02 访问器收尾、COMPAT-02～04 包资产与兼容性、DB-02 SQL Server 方言与真库验收），25 项实现与验证任务未完成（ENG-03、STORE-02 部分完成）。设计文档状态仍为“设计评审稿”，完成编写不代表用户已经确认设计。
 
-当前仓库已有 `.slnx`、`global.json`、集中构建与包管理文件、8 个产品工程、3 个测试工程和 2 个示例骨架，可还原、构建、打包并通过 254 项测试（43 项单元：工程约束、Store 合同冻结、模型列映射、注册与选项校验、JSON/UTC 转换；211 项集成：SQLite 安装脚本真库执行、六 provider 脚本资产检查、四类 Store 真库合同、集合索引与 CAS 合同、批量撤销与清理合同、关联删除矩阵与竞态、查询回调翻译、访问器与无截断、包资产与低 TFM 加载、原生 Manager 端到端）。核心包已具备 Builder/选项/连接工厂/默认实体注册、转换器与四类 Store，四类 Store 已全部注册进 DI，并已验证可经原生 Manager（含非泛型接口）创建、查找与更新；Store 的读写、删除、撤销、清理与 IQueryable 查询回调均已可用；SQLite 有可执行的 v0001 安装脚本并通过完整真库验收。其余五种方言尚未实现，协议联调按约束暂不实施。以下未完成项均为计划，不代表已有可调用功能。
+当前仓库已有 `.slnx`、集中构建与包管理文件、8 个产品工程、3 个测试工程和 2 个示例骨架（不提交 `global.json`，见 E-027），可还原、构建、打包并通过 285 项测试（45 项单元：工程约束、Store 合同冻结、模型列映射、注册与选项校验、JSON/UTC 转换；240 项集成：SQLite 安装脚本真库执行、六 provider 脚本资产检查、四类 Store 真库合同、集合索引与 CAS 合同、批量撤销与清理合同、关联删除矩阵与竞态、查询回调翻译、访问器与无截断、包资产与低 TFM 加载、原生 Manager 端到端、自定义前缀/schema 的安装副本）。核心包已具备 Builder/选项/连接工厂/默认实体注册、转换器与四类 Store，四类 Store 已全部注册进 DI，并已验证可经原生 Manager（含非泛型接口）创建、查找与更新；Store 的读写、删除、撤销、清理与 IQueryable 查询回调均已可用；SQLite 与 SQL Server 各有一份以模板交付的 v0001 安装脚本，渲染后通过真库验收。其余四种方言尚未实现，协议联调按约束暂不实施。以下未完成项均为计划，不代表已有可调用功能。
 
 | 阶段 | 任务编号 | 当前状态 | 阶段完成条件 |
 | --- | --- | --- | --- |
@@ -17,7 +17,7 @@
 | P2 工程与基础设施 | ENG-01～ENG-05 | ENG-01/02 完成；ENG-03 已完成配置/DI/Store 注册；ENG-04/05 未开始 | 7.x 五目标工程、模型、DI、连接与测试设施可用 |
 | P3 SQLite 基础读写 | STORE-01～STORE-06 | 全部完成 | 四类实体的基础读写、Token/Scope 简单删除、集合索引及 Update CAS/事务基础通过；完整关联删除在 P4 验收 |
 | P4 查询与生命周期 | QUERY-01～QUERY-03、LIFE-01～LIFE-05 | QUERY-01～03 查询与流式读取、LIFE-01～04 删除/撤销/清理完成；LIFE-05 未开始（需服务端联调） | 查询、流式读取、删除、撤销和清理合同通过 |
-| P5 数据库验收 | DB-01～DB-07 | 未开始 | 七种服务器及声明的 DM 模式分别通过完整验收 |
+| P5 数据库验收 | DB-01～DB-07 | DB-02 完成（§5 记“部分通过”）；其余未开始 | 七种服务器及声明的 DM 模式分别通过完整验收 |
 | P6 多目标与包资产 | COMPAT-01～COMPAT-04 | 全部完成 | 五 TFM 构建、包资产与驱动兼容性记录通过 |
 | P7 脚本维护、升级、协议与示例 | MIG-01～MIG-04、APP-01～APP-04 | 未开始 | SQL 资产维护、协议回归和两个 net10 示例完成 |
 | P8 CI 与交付候选 | CI-01～CI-03、REL-01～REL-02 | 未开始 | 门禁通过，具备可审阅的包和证据 |
@@ -73,8 +73,8 @@ JSON 是集合权威数据；四张辅助表同事务维护，摘要仅筛选候
 
 前置：设计基线；对应设计第 2～5、13、18 节。此阶段的最小验证工程也必须使用 net10 并纳入同一 `.slnx`，后续复用为集成测试。
 
-- [x] **BASE-01 锁定可复现依赖。** 产物：`global.json`、`Directory.Packages.props` 与本文完成记录。
-  验收：核实 OpenIddict 7.7.2 的实际发布和依赖资产，记录 SDK、Dapper、Microsoft.Extensions、测试工具及七种服务器驱动组合的精确版本、来源、TFM 与许可证限制；从干净环境可还原，依赖范围排除 8.x 及任何预览版。中央包管理为唯一版本源（工程文件无 `Version` 属性、传递依赖提升在中央清单登记），并按设计 4.1.1 记录每个 TFM 的 Microsoft.Extensions 版本线及上游同 TFM 依赖下限，验证低 TFM 组不引入高代际依赖。
+- [x] **BASE-01 锁定可复现依赖。** 产物：`Directory.Packages.props` 与本文完成记录（`global.json` 已按 E-027 移除）。
+  验收：核实 OpenIddict 7.7.2 的实际发布和依赖资产，记录 SDK、Dapper、Microsoft.Extensions、测试工具及七种服务器驱动组合的精确版本、来源、TFM 与许可证限制；从干净环境可还原，依赖范围排除 8.x 及任何预览版。中央包管理为唯一版本源（工程文件无 `Version` 属性、传递依赖提升在中央清单登记），并按设计 4.1.1 记录每个 TFM 的 Microsoft.Extensions 版本线及上游同 TFM 依赖下限，验证低 TFM 组不引入高代际依赖。SDK 只要求 .NET 10，不在仓库固定补丁版本。
 - [x] **BASE-02 建立逐版本 Store 合同清单。** 产物：`docs/contracts/7x-store-contracts.md` 与 `tests/Sharp.OpenIddict.Stores.Tests/StoreContractTests.cs`。由 E-007 完成。
   验收：按 7.7.2 真实接口列出全部成员、签名、返回/取消语义、Manager 调用和 EF 行为来源；识别 `CountAsync` 无状态参数重载、Authorization/Token 的 `FindAsync` 位置参数等 7.x 差异，列明本项目第 9.1/16.1.1 节的 NULL 补偿与精确字符串比较保证。未实现成员明确留空缺，不能以统一默认返回值冒充实现。
 - [ ] **BASE-03 Oracle 最小真实驱动验证。** 产物：`tests/Sharp.OpenIddict.Stores.IntegrationTests/` 的 Oracle fixture/验证用例。
@@ -168,12 +168,12 @@ JSON 是集合权威数据；四张辅助表同事务维护，摘要仅筛选候
 
 前置：相关系列 Store/provider 可用。对应设计第 10～12、17 节。MIG-03 汇总 STORE-01、DB-01～07 的脚本资产；MIG-04 依赖 MIG-01～03，负责最终升级链及变更维护联验。目录与维护规则从首次编写 SQL 起就执行，不能等到 P7 再补一套脚本。
 
-- [ ] **MIG-01 安装脚本与版本误用检查。** 产物：各 provider 包内版本化 SQL 及迁移合同用例。
-  验收：空库安装、schema/prefix 下主表/辅助表/版本记录完整；错误系列/版本在存储操作前拒绝，无自动 DDL，检查缓存仅限当前存储配置；脚本随包交付且约束名称不因前缀截断重名。
+- [ ] **MIG-01 安装脚本与版本误用检查。** 产物：各 provider 包内版本化 SQL 模板及迁移合同用例。
+  验收：空库安装、schema/prefix 下主表/辅助表/版本记录完整；模板经 `RenderDeploymentScript` 渲染后执行，默认与自定义前缀各一次；错误系列/版本在存储操作前拒绝，无自动 DDL，检查缓存仅限当前存储配置；模板随包交付且约束名称不因前缀截断重名。
 - [ ] **MIG-02 跨系列升级（暂不适用）。** 产物：8.x 稳定版实施后补 Resource/Session 升级 SQL、fixture 和操作说明。
   验收：当前版本不生成 7→8 脚本，任务保持未完成状态并在第 5.1 节注明不适用；等 8.x 稳定版发布并实施后，要求保留 ID、令牌、JSON、集合索引，不从任意长 Scope.Resources 值自动创建/截断 Resource.Name，先备份停旧写入再升级。Oracle/DM 部分 DDL 提交可诊断，不伪装全事务回滚，不承诺混合写入/自动降级/既有 EF 库直接复用。
 - [ ] **MIG-03 各数据库 SQL 资产与维护清单。** 产物：六 provider 的 `Sql/`、清单/执行说明、包内 `sql/` 文件及第 5.1 节矩阵。
-  验收：安装/同系列升级脚本来源唯一，目标服务器/模式、精确源/目标版本、路径、SHA-256 与包文件可追溯；UTF-8/LF、发布历史不可变及包提取一致性检查通过。MySQL/MariaDB 共用与差异文件有明确映射；DM 仅列实测声明模式。执行说明包含客户端/批次/遇错停止、schema/prefix 替换、权限和恢复；不增加运行时自动 DDL。首版无同系列前序版本时如实记录不适用，不生成空升级脚本。
+  验收：安装/同系列升级模板来源唯一，目标服务器/模式、精确源/目标版本、路径、SHA-256 与包文件可追溯；UTF-8/LF、发布历史不可变及包提取一致性检查通过。文件以 `.sql.template` 交付，清单声明 `rendersTokens`，渲染入口与运行时校验同源；直接执行模板必须失败而不是装出半套表。MySQL/MariaDB 共用与差异文件有明确映射；DM 仅列实测声明模式。执行说明包含客户端/批次/遇错停止、schema/prefix 替换、权限和恢复；不增加运行时自动 DDL。首版无同系列前序版本时如实记录不适用，不生成空升级脚本。
 - [ ] **MIG-04 SQL 持续变更与升级链回归。** 产物：集成测试中的脚本/结构比较、升级数据 fixture 和维护验证记录。
   验收：设计 10.4 的空库安装、每个仍支持起点的完整升级链及新装/升级结构一致性通过，覆盖约束/索引/排序规则/辅助表/版本与保留数据；默认/定制标识符、错版本、重复执行和部分失败可诊断。测试使用正式脚本，不临时补 DDL；七种服务器及声明的 DM 模式独立记录。新增架构版本时同时新增完整安装与增量脚本，历史字节不改；跨系列保留 MIG-02 证据，同系列无前序版本时单独注明不适用。结果同步第 5.1 节，后续结构变化必须重新验收。
 - [ ] **APP-01 完整协议联验。** 产物：`tests/Sharp.OpenIddict.Stores.Server.Tests/`。
@@ -206,11 +206,11 @@ JSON 是集合权威数据；四张辅助表同事务维护，摘要仅筛选候
 
 | 服务器/模式 | Provider | 实现与完整合同 | 驱动/TFM 支持 | 证据编号 |
 | --- | --- | --- | --- | --- |
-| SQL Server 2016+ | SqlServer | 部分通过（15 项真库合同，见 E-026） | 已实测：SqlClient 7.1.1 经 runtimes/win/lib/net9.0 在 net10 宿主加载 | E-026 |
+| SQL Server 2016+ | SqlServer | 部分通过（16 项真库合同，见 E-026、E-027） | 已实测：SqlClient 7.1.1 经 runtimes/win/lib/net9.0 在 net10 宿主加载 | E-026、E-027 |
 | PostgreSQL 14+ | PostgreSql | 未开始 | 待实测 | — |
 | MySQL 8.0+ | MySql | 未开始 | 待实测 | — |
 | MariaDB 10.6+ | MySql | 未开始 | 待实测 | — |
-| SQLite 3.35+ | Sqlite | 未开始 | 待实测 | — |
+| SQLite 3.35+ | Sqlite | 部分通过（8 项安装脚本真库用例含自定义前缀，见 E-027） | 已实测：Microsoft.Data.Sqlite 10.0.13 在 net10 宿主加载 | E-027 |
 | Oracle 19c+ | Oracle | 未开始 | 驱动仅 net8.0/netstandard2.1，待实测 | — |
 | DM8 原生模式 | Dm | 未开始 | 驱动无 net10 资产，待实测 | — |
 | DM8 Oracle 兼容模式 | Dm | 未验证，不作支持声明 | 待实测 | — |
@@ -234,11 +234,11 @@ JSON 是集合权威数据；四张辅助表同事务维护，摘要仅筛选候
 
 | 服务器/模式 | 安装/增量 | 跨系列升级 | 清单/包/执行说明 | 证据编号 |
 | --- | --- | --- | --- | --- |
-| SQL Server 2016+ | 通过（E-026） | 不适用：首版无前序架构 | 通过（E-026） | E-026 |
+| SQL Server 2016+ | 通过（E-026 默认 schema；E-027 自定义前缀 + schema） | 不适用：首版无前序架构 | 通过（E-026、E-027） | E-026、E-027 |
 | PostgreSQL 14+ | 未开始 | 不适用 | 未开始 | — |
 | MySQL 8.0+ | 未开始 | 不适用 | 未开始 | — |
 | MariaDB 10.6+ | 未开始 | 不适用 | 未开始 | — |
-| SQLite 3.35+ | 未开始 | 不适用 | 未开始 | — |
+| SQLite 3.35+ | 通过（E-026 默认前缀；E-027 自定义前缀） | 不适用：首版无前序架构 | 通过（E-026、E-027） | E-026、E-027 |
 | Oracle 19c+ | 未开始 | 不适用 | 未开始 | — |
 | DM8 原生模式 | 未开始 | 不适用 | 未开始 | — |
 | DM8 Oracle 兼容模式 | 未验证，不作支持声明 | 不适用 | 未验证 | — |
@@ -613,6 +613,24 @@ dotnet pack Sharp.OpenIddict.Stores.slnx --configuration Release --no-build --ou
 - 验证命令与结果：`dotnet build Sharp.OpenIddict.Stores.slnx -c Release` 0 警告 0 错误；`dotnet test Sharp.OpenIddict.Stores.slnx -c Release --no-build` 通过 271 项（45 单元 + 226 集成）；未设置 `DSH_SQLSERVER` 时该套件 15 项显式跳过、其余集成仍通过，设置后 0 跳过；`dotnet pack -o artifacts` 后核心包 nuspec 五个 TFM 依赖组已无 `Dapper`。
 - 结果与缺口：DB-02 按 §5 记为“部分通过”——15 项已覆盖验收清单中的唯一索引、尾随空格、Unicode、`datetime2(6)`、摘要索引、分页与关联删除，但完整合同（全部 Store 成员对 SQL Server 的逐项运行）尚未铺开，因此 §5 主表不填“通过”。未验证最低版本 SQL Server 2016，实测环境为 2025；`SqlClient` 无 `net10.0` 资产，走 `net9.0` 资产属正常降级。`UseDapper()` 保留为 `[Obsolete]` 别名并新增测试固定其与 `UseStores()` 行为一致，避免别名退化为空实现；本仓库内部调用点已全部改用 `UseStores()`。
 
+### E-027：移除 global.json，SQL 脚本改为可配置前缀/schema 的模板
+
+- 任务：BASE-01（SDK 要求）、MIG-01/MIG-03（脚本交付形态）、STORE-01/DB-02（安装验证）；系列：7.7.2。
+- 日期：2026-10-19；实现：本次未提交的工作区。
+- 起因：用户提出两个问题——(1) `global.json` 固定 SDK 补丁版本，换机器就可能因版本对不上而无法构建；(2) 表前缀是运行时可配置的，而仓库脚本把 `__PREFIX__Applications` 这类占位写法当成了可执行 SQL，装到库里根本不是合法表名。
+- 变更一（SDK）：删除 `global.json`。工程以 `net10.0` 目标框架本身作为 SDK 下限，不再绑定补丁号。验证：删除后 `dotnet --version` 为本机 10.0.401（原文件要求 10.0.402，本机并未安装），`dotnet build Sharp.OpenIddict.Stores.slnx -c Release` 0 警告 0 错误。
+- 变更二（脚本）：`v0001.sql` → `v0001.sql.template`（SQLite、SQL Server 两套，`git mv` 保留历史）；新增 `OpenIddictStoreIdentifiers.RenderDeploymentScript(template, dialect, prefix, schema)`，按运行时同一套 `Validate`+`QuoteIdentifier` 规则把 `__PREFIX__`/`__SCHEMA__` 展开为真实标识符，非法前缀/schema 在生成副本之前抛出。SQL Server 模板的全部表名、外键引用、`OBJECT_ID` 检查均加 schema 限定；SQLite 无 schema，仅用前缀占位符。
+- 清单：`manifest.json` 增加 `rendersTokens`，声明该文件包含哪些占位符，并由 `SqlAssetTests.Manifest_DeclaresTheTokensEachTemplateRenders` 与文件实际占位符（忽略注释行）逐项比对；`ShippedScripts_AreTemplatesNotRunnableSql` 断言 `Sql/` 下不再有 `.sql` 文件。
+- 测试改造：新增 `DeploymentScript` 帮助类统一渲染（11 个测试类原先各自复制 `ApplyPrefix` + 路径拼接）；同时合并 10 份重复的 `SqliteConnectionFactory` 到单个文件。
+- 真库证据一（SQLite，Microsoft.Data.Sqlite 10.0.13，net10 宿主）：渲染后执行，九张表、`Series=7/Version=1`、外键、唯一键、尾随空格唯一性、索引、重复安装被拒全部通过；新增 `CustomPrefix_InstallsAndIsUsable` 用前缀 `Oidc` 渲染安装，断言表名变为 `OidcApplications`/`OidcSchemaVersions`、默认前缀的 `OpenIddictApplications` 不存在，并用同一前缀的 Store 真实写入与按 ClientId 查回。
+- 真库证据二（SQL Server 2025 LocalDB 17.0.4025.3，SqlClient 7.1.1）：默认前缀 15 项保持通过；新增 `CustomPrefixAndSchema_InstallAndAreUsable` 在独立数据库上用前缀 `Oidc` + schema `auth` 渲染安装，断言 `auth` 下 9 张表、`dbo` 下 0 张 `Oidc*` 表、`auth.OidcSchemaVersions` 版本行为 1，并用以 `TablePrefix=Oidc`/`Schema=auth` 配置的 Store 写入与查回。该套件 16 项全部通过、0 跳过。
+- 走查中发现并修正的问题：
+  - SQLite 模板首行注释同时提到两个占位符，导致“清单声明”与“文件实际占位符”断言不一致。修正方式是让比对忽略整行注释（注释是说明，不是部署需要填充的位置），而不是改注释迁就测试。
+  - `Record.ExceptionAsync(ExecuteInstallScriptAsync)` 在方法签名增加可选参数后无法继续按方法组使用，改为显式 lambda。
+  - `PackageAssetTests` 与 `SqlAssetTests` 中硬编码的 `v0001.sql` 路径同步为 `.sql.template`，并验证包内 `sql/` 下确实携带模板而非渲染后的 SQL。
+- 验证命令与结果：`dotnet build Sharp.OpenIddict.Stores.slnx -c Release` 0 警告 0 错误；`dotnet pack -c Release -o artifacts` 产出 8 个包；`dotnet test Sharp.OpenIddict.Stores.slnx -c Release --no-build` 通过 285 项（45 单元 + 240 集成）；未设置 `DSH_SQLSERVER` 时 16 项显式跳过（269 通过 / 16 跳过），设置 LocalDB 后 285 项全通过、0 跳过。
+- 结果与缺口：脚本不再假设默认表名，前缀/schema 已是可验证的部署输入；SQLite 与 SQL Server 两套模板均有默认值与自定义值的真库证据。其余四个 provider 尚无模板；运行时读取 `SchemaVersions` 的版本检查仍未接入 Store（归 MIG-01）。
+
 后续任务完成时复制以下模板并填写，再勾选任务；同一任务有多个系列或环境时分别列明，不覆盖过去的失败/修复记录。
 ```text
 ### E-012：Application Store 与集合索引
@@ -654,16 +672,17 @@ dotnet pack Sharp.OpenIddict.Stores.slnx --configuration Release --no-build --ou
 
 ### 9.1 当前状态快照
 
-- 已完成 **25 / 50** 项。P0 文档基线、P3 SQLite 基础读写（6/6）、P4 的查询与生命周期（QUERY-01～03、LIFE-01～04）、P6 多目标与包资产（4/4）全部完成。基线已整体提交并纳入版本控制（E-025）。
-- 验证基线：`dotnet build Sharp.OpenIddict.Stores.slnx -c Release` 0 警告 0 错误；`dotnet pack -o artifacts` 产出 8 个包；`dotnet test` 通过 **254 项（43 单元 + 211 集成）**。任何改动的底线是不低于这组数字。
-- 已具备的能力：四类 Store 的全部 145 个成员、集合索引（JSON 权威 + SHA-256 候选 + Ordinal 复核）、Update CAS、七种批量撤销、Prune 清理、关联删除矩阵、IQueryable 回调翻译、逐行异步读取、五 TFM 与分 TFM 依赖组、八个包资产。
-- SQLite 是唯一完成真库验收的 provider，其余五种方言尚无实现。
+- 已完成 **25 / 50** 项。P0 文档基线、P3 SQLite 基础读写（6/6）、P4 的查询与生命周期（QUERY-01～03、LIFE-01～04）、P6 多目标与包资产（4/4）全部完成，DB-02 完成（按 §5 记“部分通过”）。基线已整体提交并纳入版本控制（E-025、E-026）。
+- 验证基线：`dotnet build Sharp.OpenIddict.Stores.slnx -c Release` 0 警告 0 错误；`dotnet pack -o artifacts` 产出 8 个包；`dotnet test` 通过 **285 项（45 单元 + 240 集成）**。任何改动的底线是不低于这组数字。
+- 已具备的能力：四类 Store 的全部 145 个成员、集合索引（JSON 权威 + SHA-256 候选 + Ordinal 复核）、Update CAS、七种批量撤销、Prune 清理、关联删除矩阵、IQueryable 回调翻译、逐行异步读取、五 TFM 与分 TFM 依赖组、八个包资产、SQLite 与 SQL Server 两套方言。
+- 仓库不提交 `global.json`（E-027）：工程只要求 .NET 10，换机器不会因补丁号对不上而构建失败。
+- SQLite 与 SQL Server（LocalDB）完成真库验收；PostgreSQL/MySQL/MariaDB/Oracle/DM 五种方言尚无实现。
 
-### 9.2 下一步：DB-02（SQL Server 方言）
+### 9.2 下一步：DB-03（PostgreSQL 方言）
 
-推荐先做 SQL Server，理由：它是六种里差异点最集中、最能暴露方言抽象是否够用的一种——需要 `BIN2` 排序规则下的精确比较、`DATALENGTH` 尾空格补偿、`GO` 批次分隔符、`@` 参数前缀、`OFFSET/FETCH` 分页。做完它，其余方言多为剪裁。
+SQL Server 已把方言抽象需要补的洞（精确比较的 `DATALENGTH` 补偿、`OFFSET/FETCH`、`datetime2(6)` 绑定）探完，PostgreSQL 需要重点处理的是 schema 限定、`bytea` 摘要、`timestamp(6)` 的 UTC 转换、`LIMIT/OFFSET` 以及驱动参数适配不污染其他 provider。**同时必须补 `Sql/7/install/v0001.sql.template` 与清单**（E-027 起脚本以模板形式交付）。
 
-**一个硬约束**：§5.1 矩阵已实测 `Microsoft.Data.SqlClient 7.1.1` **没有 net10 资产**（仅 net462/netstandard2.0/net8.0/net9.0）。因此 SQL Server 的真实连接验收只能在 net8.0 或 net9.0 宿主进行，当前仅装 net10 SDK 的环境无法完成。可以先交付方言实现与 SQL 脚本，真库验收单独记，不得用“编译通过”代替连接验收。
+`Npgsql 10.0.3` 有 net8.0/net9.0/net10.0 资产，可在 net10 宿主直连；需要一个可用的 PostgreSQL 14+ 实例（本机当前没有）。Oracle/DM 的驱动限制见 §5.1。
 
 其余待办按阶段：BASE-03/04（Oracle、达梦真库）、ENG-04/05、DB-03～DB-07、MIG-01/03/04、APP-02/03/04、CI-01/03、REL-01。**LIFE-05 与 APP-01 需要与 OpenIddict 服务端联调，按用户明确要求暂不实施。**
 
@@ -671,27 +690,30 @@ dotnet pack Sharp.OpenIddict.Stores.slnx --configuration Release --no-build --ou
 
 1. **命名**：包 `Sharp.OpenIddict.Stores.*`、类型前缀 `OpenIddictStore`、命名空间同包名，三层一致。旧名 `Sharp.OpenIddict.Dapper.*` 已废弃（见 E-024）。**历史记录 E-001～E-023 刻意保留旧名原文**，它们记录的是当时实际状态，不得为了好看而改写。
 2. **`Sharp.OpenIddict.Stores.Models` 保持原名，不改 `.Entities`**：上游 `OpenIddict.EntityFrameworkCore.Models`、`OpenIddict.EntityFramework.Models`、`OpenIddict.MongoDb.Models` 三套持久化实现均用 `.Models`，本项目刻意与上游同层级，跟随生态惯例。此前“`Stores.Models` 读起来像 Store 的模型”的顾虑已被上游先例否定。
-3. **Dapper 暂保留为内部实现细节**：API 只在 `OpenIddictStoreSession` 内出现（8 处），已由 `DapperIsConfinedToTheQueryExecutionLayer` 测试固化边界。退出条件见设计 §9.3：DB-02～DB-07 全部完成且各驱动参数规则有真库证据后，再将 session 改写为显式 `DbParameter`。**不要在方言未定型时提前重写**，那会在未验证的规则上建立未完成的方言。
-4. **公开合同以设计文档为准**：API、数据库结构或支持范围需要变化时，先改设计文档再改代码与测试。
+3. **执行层已直接基于 ADO.NET**：Dapper 已从依赖与源码中移除（E-026），`DapperIsNotReferencedOrImported` 与 `CentralManifest_DoesNotPinDapper` 固化该边界。不要再引入任何 ORM。
+4. **不提交 `global.json`**：只要求 .NET 10 SDK，实际版本记在完成记录里（E-027）。想“精确锁版本”的冲动要压住——换机就构建不了的成本更高。
+5. **SQL 脚本一律以 `.sql.template` 交付**：前缀与 schema 是运行时配置，写死表名的文件对定制部署必错；渲染唯一入口是 `OpenIddictStoreIdentifiers.RenderDeploymentScript`，清单用 `rendersTokens` 声明占位符（E-027）。**不得**为图省事再加一份“默认前缀可直接执行”的 `.sql`。
+6. **公开合同以设计文档为准**：API、数据库结构或支持范围需要变化时，先改设计文档再改代码与测试。
 
 ### 9.4 踩过的坑（避免重复）
 
-- **`manifest.json` 的 SHA-256 会随脚本内容失效**。任何改动安装脚本（哪怕只是注释）都必须重算摘要，`SqlAssetTests` 会失败提醒。更新摘要前先确认脚本只有预期差异，不要把“改清单凑通过”当成修复。
+- **`manifest.json` 的 SHA-256 会随脚本内容失效**。任何改动模板（哪怕只是注释）都必须重算摘要，`SqlAssetTests` 会失败提醒。更新摘要前先确认文件只有预期差异，不要把“改清单凑通过”当成修复。
+- **模板占位符与注释**：`Manifest_DeclaresTheTokensEachTemplateRenders` 只统计非注释行里的占位符。模板头部注释里写占位符名不会让断言失败，但真正用在 SQL 里的占位符必须与清单一致。
 - **`docs/development.md` 的 §8 历史记录不要批量替换**。改名、术语调整等全局替换必须排除 §8 区间，否则会篡改历史证据（E-024 曾发生并已还原 43 行）。
 - **新增的“约束类测试”必须验证其有效性**。写完限制性断言后，故意注入一次违规确认测试会失败，再撤销；否则可能写出永远为真的假保护（E-024 中曾发生过）。
-- **本仓库 `.cs` 文件使用 CRLF，`.md`/`.sql`/`.json` 使用 LF 且无 BOM**（见 `.gitattributes`）。用脚本批量写文件时按类型分别处理，`git diff --check` 必须保持干净。
+- **本仓库 `.cs`、`.sql.template`、`.json`、`.md` 统一使用 LF 且无 BOM**（见 `.gitattributes`）。用脚本批量写文件时保持 LF，`git diff --check` 必须干净。
 - **代码与测试文本一律英文**，仅 `docs/` 为中文。
 
 ### 9.5 仓库搬迁注意
 
-`src/`、`tests/`、`samples/`、`docs/contracts/`、`global.json`、`Directory.*.props`、`*.slnx`、`.gitattributes` 已在 `ec2a420`（E-025）纳入版本控制，搬到新路径后 `git status` 应当干净。仍然：
+`src/`、`tests/`、`samples/`、`docs/contracts/`、`Directory.*.props`、`*.slnx`、`.gitattributes` 已在 `ec2a420`（E-025）纳入版本控制，搬到新路径后 `git status` 应当干净（`global.json` 已删除，见 E-027）。仍然：
 
 - 不要执行 `git clean -fdx`，它会连未跟踪的 `bin/`、`obj/`、`artifacts/` 一起删；`artifacts/` 里的 8 个包需要重新 `dotnet pack` 才能恢复（COMPAT-02 的断言读的是真实 nupkg）。
-- 移动后先在新路径执行 `dotnet restore Sharp.OpenIddict.Stores.slnx`，再 `dotnet test`，确认仍是 254 项通过（`bin/`、`obj/` 中留有旧的绝对路径）。
+- 移动后先在新路径执行 `dotnet restore Sharp.OpenIddict.Stores.slnx`，再 `dotnet test`，确认仍是 285 项通过（`bin/`、`obj/` 中留有旧的绝对路径）。
 
 ### 9.6 下一会话的读取顺序
 
 1. 本节（§9）确认状态与下一步。
-2. `docs/design.md` §1.1（命名）、§5.1（驱动矩阵）、§9.3（Dapper 边界）三处与本阶段强相关。
+2. `docs/design.md` §1.1（命名）、§5.1（驱动矩阵）、§9.3（执行层）、§10.1（模板交付）四处与本阶段强相关。
 3. §4 任务清单确认具体验收标准。
-4. 动手前先跑一次 `dotnet test`，确认基线仍是 254 项通过。
+4. 动手前先跑一次 `dotnet test`，确认基线仍是 285 项通过。

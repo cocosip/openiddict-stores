@@ -1,8 +1,10 @@
--- Sharp.OpenIddict.Stores — SQLite 7 / v0001 install script
+-- Sharp.OpenIddict.Stores — SQLite 7 / v0001 install script TEMPLATE
+-- This file is not executable as-is: __PREFIX__ and __SCHEMA__ must be rendered first (see Sql/README.md).
 -- Target: SQLite 3.35.0 or later; install into an empty database.
 -- Source version: none (install script); target: Series 7 / Version 1.
 -- Transaction boundary: the whole script runs in a single transaction; any failing statement rolls back, leaving no partial structures.
--- Identifiers: __PREFIX__ is replaced by the deployment copy using the same validation rules as at runtime, defaulting to OpenIddict.
+-- Identifiers: the prefix placeholder is replaced by the deployment copy using the same validation rules
+--   as at runtime (default OpenIddict). SQLite has no schemas, so the schema placeholder is not used here; SetSchema is rejected by the options validator.
 -- Foreign keys: SQLite disables foreign key constraints by default, so the connection must execute PRAGMA foreign_keys = ON; all deletions are handled explicitly by the Store.
 
 BEGIN TRANSACTION;

@@ -1,5 +1,6 @@
 # SQL deployment scripts are byte-stable deliverables: UTF-8 without BOM, LF endings (design 10.1/10.2).
 *.sql text eol=lf
+*.sql.template text eol=lf
 *.cs text eol=lf
 *.csproj text eol=lf
 *.props text eol=lf

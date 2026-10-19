@@ -39,18 +39,39 @@ public static class OpenIddictStoreIdentifiers
         return value;
     }
 
-    /// <summary>Replaces the <c>__PREFIX__</c> placeholder with the validated prefix.</summary>
-    /// <remarks>The deployment script source keeps the placeholder; customization only happens on the generated deployment copy, so historical files stay byte-for-byte unchanged.</remarks>
-    public static string ApplyPrefix(string sql, string prefix)
+    /// <summary>
+    /// Renders a deployment copy from a shipped <c>.sql.template</c>: <c>__PREFIX__</c> becomes the table
+    /// prefix and <c>__SCHEMA__</c> becomes the quoted schema plus its trailing dot (nothing when the
+    /// provider default schema is used, or when the template has no schema placeholder). Both are validated
+    /// with the rules the runtime uses, so a copy always matches the configured table prefix and schema.
+    /// </summary>
+    /// <param name="template">The template text, as shipped in the provider package.</param>
+    /// <param name="dialect">The provider dialect; it supplies identifier quoting for the schema.</param>
+    /// <param name="prefix">The table prefix, defaulting to <see cref="OpenIddictStoreOptions.DefaultTablePrefix"/>.</param>
+    /// <param name="schema">The dedicated schema, or null to use the provider default.</param>
+    public static string RenderDeploymentScript(
+        string template, IOpenIddictStoreDialect dialect, string prefix, string? schema = null)
     {
-        if (sql is null)
+        if (template is null)
         {
-            throw new ArgumentNullException(nameof(sql));
+            throw new ArgumentNullException(nameof(template));
+        }
+
+        if (dialect is null)
+        {
+            throw new ArgumentNullException(nameof(dialect));
         }
 
         Validate(prefix, nameof(prefix));
 
-        return sql.Replace("__PREFIX__", prefix);
+        var qualifier = string.IsNullOrEmpty(schema)
+            ? string.Empty
+            // Quoted so a schema that collides with a keyword still works.
+            : dialect.QuoteIdentifier(Validate(schema!, nameof(schema))) + ".";
+
+        return template
+            .Replace("__SCHEMA__", qualifier)
+            .Replace("__PREFIX__", prefix);
     }
 
     /// <summary>Splits the script on <c>;</c> into individually executable statements, ignoring empty statements and comment lines.</summary>

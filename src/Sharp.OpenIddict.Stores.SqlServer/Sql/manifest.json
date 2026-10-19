@@ -7,12 +7,13 @@
       "server": "SQL Server",
       "minimumVersion": "2016",
       "state": "available",
+      "rendersTokens": ["__PREFIX__", "__SCHEMA__"],
       "sourceSeries": null,
       "sourceVersion": null,
       "targetSeries": "7",
       "targetVersion": 1,
-      "path": "7/install/v0001.sql",
-      "sha256": "9414F87C4E5F32D5F58EDDAEB5D80670A35BDAB0DEAF73FCCA8F04FCDDD24F9C"
+      "path": "7/install/v0001.sql.template",
+      "sha256": "6348044A1D5D0B37A5811CA379BF1A6CCA751342390CD0B7C4F4FE109F4D4298"
     }
   ]
 }

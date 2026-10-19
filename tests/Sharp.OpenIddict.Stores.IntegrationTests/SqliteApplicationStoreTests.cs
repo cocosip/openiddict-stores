@@ -43,10 +43,7 @@ public sealed class SqliteApplicationStoreTests : IAsyncLifetime
         {
             await connection.OpenAsync();
 
-            var script = OpenIddictStoreIdentifiers.ApplyPrefix(
-                await File.ReadAllTextAsync(Path.Combine(RepositoryRoot,
-                    "src", "Sharp.OpenIddict.Stores.Sqlite", "Sql", "7", "install", "v0001.sql")),
-                "OpenIddict");
+            var script = DeploymentScript.Sqlite();
 
             foreach (var statement in OpenIddictStoreIdentifiers.SplitStatements(script))
             {
@@ -394,31 +391,5 @@ public sealed class SqliteApplicationStoreTests : IAsyncLifetime
         command.CommandText = sql;
 
         return (long)(await command.ExecuteScalarAsync())!;
-    }
-
-    private static string RepositoryRoot { get; } = LocateRepositoryRoot();
-
-    private static string LocateRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Sharp.OpenIddict.Stores.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
-        return directory?.FullName
-            ?? throw new InvalidOperationException("Could not locate the repository root (Sharp.OpenIddict.Stores.slnx).");
-    }
-
-    private sealed class SqliteConnectionFactory : IOpenIddictStoreConnectionFactory
-    {
-        private readonly string _connectionString;
-
-        public SqliteConnectionFactory(string connectionString) => _connectionString = connectionString;
-
-        public ValueTask<System.Data.Common.DbConnection> CreateConnectionAsync(
-            System.Threading.CancellationToken cancellationToken)
-            => new(new SqliteConnection(_connectionString));
     }
 }

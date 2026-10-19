@@ -222,7 +222,7 @@ public sealed class PackageAssetTests
 
         var sqlite = ListEntries("Sharp.OpenIddict.Stores.Sqlite");
 
-        Assert.Contains("sql/7/install/v0001.sql", sqlite);
+        Assert.Contains("sql/7/install/v0001.sql.template", sqlite);
         Assert.Contains("sql/manifest.json", sqlite);
         Assert.Contains("sql/README.md", sqlite);
     }

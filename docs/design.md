@@ -89,7 +89,6 @@ provider 引用核心包，核心包只引用 Models 与 OpenIddict.Core。产�
 
 ```text
 Sharp.OpenIddict.Stores.slnx
-global.json
 Directory.Build.props
 Directory.Packages.props
 src/
@@ -367,20 +366,22 @@ ADO.NET 不提供 LINQ provider；OpenIddict 的 CountAsync/GetAsync/ListAsync �
 
 ```text
 src/Sharp.OpenIddict.Stores.<Provider>/Sql/
-  8/
+  7/
     manifest.json
     README.md
-    install/v0001.sql
-    install/v0002.sql
-    upgrade/v0001-to-v0002.sql
+    install/v0001.sql.template
+    install/v0002.sql.template
+    upgrade/v0001-to-v0002.sql.template
     variants/                         # 仅放确有差异的服务器/模式脚本
   cross-series/
-    7-v0001-to-8-v0001.sql             # 8.x 稳定版实施后再补
+    7-v0001-to-8-v0001.sql.template    # 8.x 稳定版实施后再补
 ```
 
-`manifest.json` 逐条记录 provider、适用服务器/模式与最低版本、脚本类型、可用/仅历史保留状态、源/目标 Series 与 Version、相对 Sql 根目录的路径和 SHA-256。安装脚本的源版本为空；升级脚本必须有确定的源/目标版本。每个 SQL 的头部注释说明用途、适用目标、源/目标版本及事务/失败边界，与清单对应。MySql 清单分别列出 MySQL 和 MariaDB 的适用项；可引用同一物理文件，但必须分别执行验收。有差异时在 variants 中增加明确的专用文件；Dm 原生与声明支持的 Oracle 兼容模式遵循相同规则，不通过人工临时修改脚本适配。
+所有脚本文件都以 `.sql.template` 结尾：表前缀与 schema 是运行时配置，写死表名的文件对任何定制部署都是错的，而扩展名必须让“这是模板、不是可直接执行的脚本”一眼可见。
 
-SQL 源文件统一为 UTF-8 无 BOM、LF，由 `.gitattributes` 固定行尾；摘要针对待交付文件的原始字节计算。对应 provider 的 nupkg 在 `sql/` 下保留 Sql 目录的相对结构，交付适用的 SQL、清单和 README；不按 TFM 复制多套脚本，不依靠安装 NuGet 自动执行或自动复制到应用目录。用户可从包中提取，包检查验证提取文件与仓库源码逐字节一致。
+`manifest.json` 逐条记录 provider、适用服务器/模式与最低版本、脚本类型、可用/仅历史保留状态、`rendersTokens`（该文件包含哪些占位符）、源/目标 Series 与 Version、相对 Sql 根目录的路径和 SHA-256。安装脚本的源版本为空；升级脚本必须有确定的源/目标版本。每个模板的头部注释说明用途、适用目标、源/目标版本及事务/失败边界，与清单对应。MySql 清单分别列出 MySQL 和 MariaDB 的适用项；可引用同一物理文件，但必须分别执行验收。有差异时在 variants 中增加明确的专用文件；Dm 原生与声明支持的 Oracle 兼容模式遵循相同规则，不通过人工临时修改脚本适配。
+
+SQL 源文件统一为 UTF-8 无 BOM、LF，由 `.gitattributes` 固定行尾；摘要针对待交付文件的原始字节计算。对应 provider 的 nupkg 在 `sql/` 下保留 Sql 目录的相对结构，交付适用的模板、清单和 README；不按 TFM 复制多套脚本，不依靠安装 NuGet 自动执行或自动复制到应用目录。用户可从包中提取，包检查验证提取文件与仓库源码逐字节一致。
 
 ### 10.2 版本与历史维护
 
@@ -399,7 +400,7 @@ NuGet 包版本、OpenIddict 版本和数据库架构版本各自管理。架构
 
 各 provider 的 README 维护执行工具/版本、脚本顺序、权限、批次分隔符、遇错停止方式、schema/prefix 设置、停写要求、备份与失败恢复步骤。SQL Server 的 GO、Oracle 客户端的 `/` 等客户端分隔符不能直接当作 ADO.NET 命令发给数据库；真实测试和部署必须遵循相同执行约定。恢复按已有对象、数据与版本记录诊断，Oracle/DM 的 DDL 部分提交如实记录；失败后不恢复应用写入，直到人工恢复并重新验证。
 
-schema/table-prefix 定制只作用于部署脚本的标识符占位符，按 provider 与运行时相同的校验、引用和约束命名规则生成部署副本。标识符不能用普通值参数代替，也不能直接拼接未经校验的输入。保留原始文件摘要，并记录定制标识符与部署副本摘要；定制不修改仓库中的历史脚本。首版沿用已有部署工具或明确的人工步骤，不为此新增通用模板/迁移框架。
+schema/table-prefix 定制只作用于模板中的两个占位符，按 provider 与运行时相同的校验、引用和约束命名规则生成部署副本。渲染入口是 `OpenIddictStoreIdentifiers.RenderDeploymentScript(template, dialect, prefix, schema)`：非法前缀或 schema 在生成副本前抛出；`__SCHEMA__` 由方言引用后展开为带尾点的限定前缀，未配置 schema（或该 provider 无 schema 概念）时展开为空。使用前必须渲染，因此模板不提供“默认前缀可直接执行”的版本。标识符不能用普通值参数代替，也不能直接拼接未经校验的输入。保留原始模板摘要，并记录定制标识符与部署副本摘要；定制不修改仓库中的历史文件。首版沿用已有部署工具或明确的人工步骤，不为此新增通用模板/迁移框架。
 
 MySQL/MariaDB 的字符集、索引与 DDL 差异，以及 Oracle/DM 的模式、LOB、名称长度和事务差异，均在各自脚本和说明中处理。共用文件不等于共用验收结论；不支持的服务器/模式在清单和使用说明中明确排除。
 
@@ -501,7 +502,7 @@ Store 默认 Scoped；无状态方言可 Singleton；连接不注册为 Singleto
 
 首版方言接口的确定成员是：`Provider`、`ParameterPrefix`、`MaximumParameters`（分块与 IN 保护上限）、`QuoteIdentifier`、`BuildExactStringEquals`、`BuildExactStringNotEqualsIncludingNull`、`BuildPaging`、`FormatDate`、`ReadDate`。`FormatDate`/`ReadDate` 负责日期参数绑定与列读取：SQLite 无原生日期类型，绑定固定格式 UTC 文本（`yyyy-MM-dd HH:mm:ss.ffffff`）并按文本解析；有原生日期类型的 provider 直接绑定 `DateTime`。`BuildExactStringNotEqualsIncludingNull` 生成把 NULL 视为不相等的精确不等谓词（`column IS NULL OR column <> @p`），供批量撤销使用；直接用 `<>` 会因三值逻辑静默丢掉 NULL 行。Store 不直接依赖驱动对日期的默认转换，因此新增方言时必须实现这几个成员。provider 方法（`UseSqlServer()` 等）由各自的 provider 包提供，核心包只暴露 `UseProvider(OpenIddictStoreProvider)` 作为它们共同的落地入口，避免六个 provider 包互相引用。方言实例无状态，注册为 Singleton；Store 为 Scoped。
 
-标识符只有两个来源：固定的表/列名常量，以及经 `OpenIddictStoreIdentifiers` 校验的 schema/前缀。部署脚本源码用 `__PREFIX__` 占位符保存前缀位置，生成部署副本时才替换，仓库中的历史脚本字节不变。
+标识符只有两个来源：固定的表/列名常量，以及经 `OpenIddictStoreIdentifiers` 校验的 schema/前缀。表前缀与 schema 是运行时配置（`SetTablePrefix`/`SetSchema`），部署脚本因此不能写死具体表名：仓库中的脚本文件一律以 `.sql.template` 交付，用 `__PREFIX__` 和 `__SCHEMA__` 两个占位符保存可配置位置，由 `OpenIddictStoreIdentifiers.RenderDeploymentScript(template, dialect, prefix, schema)` 按运行时同一套校验与引用规则生成部署副本后才执行。占位符不会留在任何可执行文本里；把模板直接交给数据库会因表名非法而失败，这是刻意的——它防止有人漏掉渲染步骤后误以为装好了。
 
 查询表达式解析先形成受支持的操作序列，再由方言产生 SQL 与参数。保持原查询算子顺序；例如 Take 之后的 Where，不能直接改写成先 Where 再 Take。需要嵌套子查询才能保持语义时应生成子查询；无法正确处理的组合按公开限制拒绝，不能返回近似结果。
 
@@ -690,7 +691,7 @@ provider 脚本目录、清单、不可变历史与版本递增遵守第 10 节�
 
 ## 18. 构建、持续集成和发布合同
 
-所有项目加入 `.slnx`，通过 `.NET 10 SDK` 构建；SDK 精确版本在 global.json 固定，允许同 feature band 的安全补丁更新。常规入口包括 Release build、test、pack 与格式/差异检查。
+所有项目加入 `.slnx`，通过 `.NET 10 SDK` 构建。**仓库不使用 `global.json` 固定补丁版本**：换一台机器或换一个 SDK 补丁就可能因版本号对不上而无法还原构建，代价远高于收益。工程只要求 .NET 10 SDK（`net10.0` 目标框架本身即版本下限），实际使用的 SDK 在完成记录里如实登记，不作机器绑定。常规入口包括 Release build、test、pack 与格式/差异检查。
 
 CI 分三个阶段：
 

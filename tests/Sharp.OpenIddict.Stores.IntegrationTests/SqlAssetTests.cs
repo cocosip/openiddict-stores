@@ -25,7 +25,77 @@ public sealed class SqlAssetTests
 
         Assert.True(File.Exists(Path.Combine(root, "manifest.json")));
         Assert.True(File.Exists(Path.Combine(root, "README.md")));
-        Assert.True(File.Exists(Path.Combine(root, "7", "install", "v0001.sql")));
+        Assert.True(File.Exists(Path.Combine(root, "7", "install", "v0001.sql.template")));
+    }
+
+    /// <summary>
+    /// Scripts are shipped as templates: the table prefix and schema are runtime configuration, so a file
+    /// with concrete identifiers would be wrong for every non-default deployment (design 10.1).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public void ShippedScripts_AreTemplatesNotRunnableSql(string provider)
+    {
+        var root = Path.Combine(RepositoryRoot, "src", $"Sharp.OpenIddict.Stores.{provider}", "Sql");
+
+        if (!Directory.Exists(root))
+        {
+            return;
+        }
+
+        // A .sql file would be mistaken for something a deployment can execute directly.
+        var rendered = Directory.EnumerateFiles(root, "*.sql", SearchOption.AllDirectories).ToList();
+
+        Assert.True(rendered.Count == 0,
+            $"{provider} ships runnable SQL instead of templates: " + string.Join(", ", rendered));
+    }
+
+    /// <summary>Every template must declare which placeholders a deployment has to render.</summary>
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public void Manifest_DeclaresTheTokensEachTemplateRenders(string provider)
+    {
+        var root = Path.Combine(RepositoryRoot, "src", $"Sharp.OpenIddict.Stores.{provider}", "Sql");
+        var manifestPath = Path.Combine(root, "manifest.json");
+
+        if (!File.Exists(manifestPath))
+        {
+            return;
+        }
+
+        using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
+
+        foreach (var entry in document.RootElement.GetProperty("entries").EnumerateArray())
+        {
+            var tokens = entry.GetProperty("rendersTokens").EnumerateArray()
+                .Select(token => token.GetString()!)
+                .ToHashSet(StringComparer.Ordinal);
+
+            Assert.Contains("__PREFIX__", tokens);
+
+            var path = Path.Combine(root,
+                entry.GetProperty("path").GetString()!.Replace('/', Path.DirectorySeparatorChar));
+            var text = File.ReadAllText(path);
+
+            // The declaration and the file have to agree, otherwise a deployment misses a placeholder.
+            Assert.Equal(tokens.OrderBy(token => token, StringComparer.Ordinal),
+                TokensIn(text).OrderBy(token => token, StringComparer.Ordinal));
+        }
+    }
+
+    private static IEnumerable<string> TokensIn(string text)
+    {
+        // Comments are documentation, not placeholders that a deployment has to fill in.
+        var script = string.Join("\n", text.Split('\n')
+            .Where(line => !line.TrimStart().StartsWith("--", StringComparison.Ordinal)));
+
+        foreach (var token in new[] { "__PREFIX__", "__SCHEMA__" })
+        {
+            if (script.Contains(token, StringComparison.Ordinal))
+            {
+                yield return token;
+            }
+        }
     }
 
     [Theory]
@@ -88,7 +158,7 @@ public sealed class SqlAssetTests
 
         var offenders = new List<string>();
 
-        foreach (var file in Directory.EnumerateFiles(root, "*.sql", SearchOption.AllDirectories))
+        foreach (var file in EnumerateScripts(root))
         {
             var bytes = File.ReadAllBytes(file);
 
@@ -123,7 +193,7 @@ public sealed class SqlAssetTests
             .Select(entry => entry.GetProperty("path").GetString()!)
             .ToHashSet(StringComparer.Ordinal);
 
-        var actual = Directory.EnumerateFiles(root, "*.sql", SearchOption.AllDirectories)
+        var actual = EnumerateScripts(root)
             .Select(path => Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/'))
             .ToList();
 
@@ -132,6 +202,10 @@ public sealed class SqlAssetTests
         Assert.True(unreferenced.Count == 0,
             $"{provider} has scripts that are not registered in the manifest: " + string.Join(", ", unreferenced));
     }
+
+    private static IEnumerable<string> EnumerateScripts(string root)
+        => Directory.EnumerateFiles(root, "*.sql.template", SearchOption.AllDirectories)
+            .Concat(Directory.EnumerateFiles(root, "*.sql", SearchOption.AllDirectories));
 
     private static string RepositoryRoot { get; } = LocateRepositoryRoot();
 

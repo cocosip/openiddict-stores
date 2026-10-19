@@ -7,12 +7,13 @@
       "server": "SQLite",
       "minimumVersion": "3.35.0",
       "state": "available",
+      "rendersTokens": ["__PREFIX__"],
       "sourceSeries": null,
       "sourceVersion": null,
       "targetSeries": "7",
       "targetVersion": 1,
-      "path": "7/install/v0001.sql",
-      "sha256": "549BBE7AE7CD88372F975CF0C59936A0AEF546F8CADC3F53508F6F5F7705C6C4"
+      "path": "7/install/v0001.sql.template",
+      "sha256": "C548D699151F908758BE8B70250A2C9054A4260DFFF8CCBE2C4A27043F2A7E4F"
     }
   ]
 }

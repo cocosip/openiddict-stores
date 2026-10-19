@@ -89,16 +89,29 @@ public sealed class LowTargetFrameworkAssetTests
             Assert.IsType<TargetInvocationException>(rejected);
             Assert.IsType<ArgumentException>(rejected!.InnerException);
 
-            // The SQL prefixer is used by every install script path; run it for real.
-            var applyPrefix = identifiers.GetMethod("ApplyPrefix", BindingFlags.Public | BindingFlags.Static)!;
+            // The template renderer is used by every install path; run it for real. It needs a dialect for
+            // schema quoting, so the low-TFM SQLite dialect is loaded from the asset next to this one.
+            var sqlitePath = Path.Combine(
+                RepositoryRoot, "src", "Sharp.OpenIddict.Stores.Sqlite", "bin", "Release", framework,
+                "Sharp.OpenIddict.Stores.Sqlite.dll");
 
-            // Install scripts use the __PREFIX__ placeholder; the call must substitute every occurrence.
-            var prefixed = (string)applyPrefix.Invoke(
-                null, ["CREATE TABLE __PREFIX__Applications (Id TEXT); INDEX ON __PREFIX__Applications (Id)", "Oidc"])!;
+            var sqlite = context.LoadFromAssemblyPath(sqlitePath);
+            var dialect = sqlite.GetType("Sharp.OpenIddict.Stores.Sqlite.OpenIddictStoreSqliteDialect", true)!
+                .GetProperty("Instance", BindingFlags.Public | BindingFlags.Static)!.GetValue(null)!;
 
-            Assert.Contains("CREATE TABLE OidcApplications", prefixed, StringComparison.Ordinal);
-            Assert.Contains("INDEX ON OidcApplications", prefixed, StringComparison.Ordinal);
-            Assert.DoesNotContain("__PREFIX__", prefixed, StringComparison.Ordinal);
+            var render = identifiers.GetMethod("RenderDeploymentScript", BindingFlags.Public | BindingFlags.Static)!;
+
+            var rendered = (string)render.Invoke(null,
+            [
+                "CREATE TABLE __PREFIX__Applications (Id TEXT); INDEX ON __PREFIX__Applications (Id)",
+                dialect,
+                "Oidc",
+                null,
+            ])!;
+
+            Assert.Contains("CREATE TABLE OidcApplications", rendered, StringComparison.Ordinal);
+            Assert.Contains("INDEX ON OidcApplications", rendered, StringComparison.Ordinal);
+            Assert.DoesNotContain("__PREFIX__", rendered, StringComparison.Ordinal);
 
             // The statement splitter drives script execution; a two-statement script must yield two parts.
             var splitStatements = identifiers.GetMethod(
