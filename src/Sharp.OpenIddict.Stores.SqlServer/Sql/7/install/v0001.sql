@@ -1,0 +1,167 @@
+-- Sharp.OpenIddict.Stores — SQL Server 7 / v0001 install script
+-- Target: SQL Server 2016 (13.x) or later, default collation; install into an empty schema.
+-- Source version: none (install script); target: Series 7 / Version 1.
+-- Transaction boundary: the whole script runs in one explicit transaction; any failing statement rolls back to no structures.
+-- Identifiers: __PREFIX__ is replaced by the deployment copy using the same validation rules as at runtime, defaulting to OpenIddict.
+-- Batching: the script contains no GO separator, so it can be executed by a single client session or by an ADO.NET command loop.
+-- Deletion: every foreign key is NO ACTION; the Store performs the associated deletes explicitly (design 16.2.1).
+-- Exact comparisons: the Store applies COLLATE LATIN1_GENERAL_100_BIN2 plus DATALENGTH checks at query time;
+-- the physical unique indexes below use a binary collation so that their uniqueness matches that contract.
+
+BEGIN TRANSACTION;
+
+-- Refuse to install over an existing schema instead of skipping over it (design 10.3).
+IF OBJECT_ID(N'__PREFIX__Applications', N'U') IS NOT NULL
+    THROW 50000, N'The OpenIddict schema is already installed; this script only runs against an empty target.', 1;
+
+CREATE TABLE [__PREFIX__Applications] (
+    [Id] nvarchar(100) NOT NULL,
+    [ConcurrencyToken] nvarchar(50) NOT NULL,
+    [ApplicationType] nvarchar(50) NULL,
+    [ClientId] nvarchar(100) COLLATE Latin1_General_100_BIN2 NULL,
+    [ClientSecret] nvarchar(max) NULL,
+    [ClientType] nvarchar(50) NULL,
+    [ConsentType] nvarchar(50) NULL,
+    [DisplayName] nvarchar(max) NULL,
+    [DisplayNames] nvarchar(max) NULL,
+    [JsonWebKeySet] nvarchar(max) NULL,
+    [Permissions] nvarchar(max) NULL,
+    [PostLogoutRedirectUris] nvarchar(max) NULL,
+    [Properties] nvarchar(max) NULL,
+    [RedirectUris] nvarchar(max) NULL,
+    [Requirements] nvarchar(max) NULL,
+    [Settings] nvarchar(max) NULL,
+    CONSTRAINT [PK___PREFIX__Applications] PRIMARY KEY ([Id])
+);
+
+CREATE TABLE [__PREFIX__Authorizations] (
+    [Id] nvarchar(100) NOT NULL,
+    [ConcurrencyToken] nvarchar(50) NOT NULL,
+    [ApplicationId] nvarchar(100) NULL,
+    [CreationDate] datetime2(6) NULL,
+    [Properties] nvarchar(max) NULL,
+    [Scopes] nvarchar(max) NULL,
+    [Status] nvarchar(50) NULL,
+    [Subject] nvarchar(400) NULL,
+    [Type] nvarchar(50) NULL,
+    CONSTRAINT [PK___PREFIX__Authorizations] PRIMARY KEY ([Id]),
+    CONSTRAINT [FK___PREFIX__Authorizations_Applications_ApplicationId]
+        FOREIGN KEY ([ApplicationId]) REFERENCES [__PREFIX__Applications] ([Id])
+);
+
+CREATE TABLE [__PREFIX__Scopes] (
+    [Id] nvarchar(100) NOT NULL,
+    [ConcurrencyToken] nvarchar(50) NOT NULL,
+    [Description] nvarchar(max) NULL,
+    [Descriptions] nvarchar(max) NULL,
+    [DisplayName] nvarchar(max) NULL,
+    [DisplayNames] nvarchar(max) NULL,
+    [Name] nvarchar(200) COLLATE Latin1_General_100_BIN2 NULL,
+    [Properties] nvarchar(max) NULL,
+    [Resources] nvarchar(max) NULL,
+    CONSTRAINT [PK___PREFIX__Scopes] PRIMARY KEY ([Id])
+);
+
+CREATE TABLE [__PREFIX__Tokens] (
+    [Id] nvarchar(100) NOT NULL,
+    [ConcurrencyToken] nvarchar(50) NOT NULL,
+    [ApplicationId] nvarchar(100) NULL,
+    [AuthorizationId] nvarchar(100) NULL,
+    [CreationDate] datetime2(6) NULL,
+    [ExpirationDate] datetime2(6) NULL,
+    [Payload] nvarchar(max) NULL,
+    [Properties] nvarchar(max) NULL,
+    [RedemptionDate] datetime2(6) NULL,
+    [ReferenceId] nvarchar(100) COLLATE Latin1_General_100_BIN2 NULL,
+    [Status] nvarchar(50) NULL,
+    [Subject] nvarchar(400) NULL,
+    [Type] nvarchar(150) NULL,
+    CONSTRAINT [PK___PREFIX__Tokens] PRIMARY KEY ([Id]),
+    CONSTRAINT [FK___PREFIX__Tokens_Applications_ApplicationId]
+        FOREIGN KEY ([ApplicationId]) REFERENCES [__PREFIX__Applications] ([Id]),
+    CONSTRAINT [FK___PREFIX__Tokens_Authorizations_AuthorizationId]
+        FOREIGN KEY ([AuthorizationId]) REFERENCES [__PREFIX__Authorizations] ([Id])
+);
+
+CREATE TABLE [__PREFIX__ApplicationRedirectUris] (
+    [ApplicationId] nvarchar(100) NOT NULL,
+    [UriHash] binary(32) NOT NULL,
+    [Uri] nvarchar(max) NOT NULL,
+    [Position] int NOT NULL,
+    CONSTRAINT [PK___PREFIX__ApplicationRedirectUris] PRIMARY KEY ([ApplicationId], [Position]),
+    CONSTRAINT [FK___PREFIX__ApplicationRedirectUris_Applications_ApplicationId]
+        FOREIGN KEY ([ApplicationId]) REFERENCES [__PREFIX__Applications] ([Id])
+);
+
+CREATE TABLE [__PREFIX__ApplicationPostLogoutRedirectUris] (
+    [ApplicationId] nvarchar(100) NOT NULL,
+    [UriHash] binary(32) NOT NULL,
+    [Uri] nvarchar(max) NOT NULL,
+    [Position] int NOT NULL,
+    CONSTRAINT [PK___PREFIX__ApplicationPostLogoutRedirectUris] PRIMARY KEY ([ApplicationId], [Position]),
+    CONSTRAINT [FK___PREFIX__ApplicationPostLogoutRedirectUris_Applications_ApplicationId]
+        FOREIGN KEY ([ApplicationId]) REFERENCES [__PREFIX__Applications] ([Id])
+);
+
+CREATE TABLE [__PREFIX__AuthorizationScopes] (
+    [AuthorizationId] nvarchar(100) NOT NULL,
+    [ScopeHash] binary(32) NOT NULL,
+    [Scope] nvarchar(max) NOT NULL,
+    [Position] int NOT NULL,
+    CONSTRAINT [PK___PREFIX__AuthorizationScopes] PRIMARY KEY ([AuthorizationId], [Position]),
+    CONSTRAINT [FK___PREFIX__AuthorizationScopes_Authorizations_AuthorizationId]
+        FOREIGN KEY ([AuthorizationId]) REFERENCES [__PREFIX__Authorizations] ([Id])
+);
+
+CREATE TABLE [__PREFIX__ScopeResources] (
+    [ScopeId] nvarchar(100) NOT NULL,
+    [ResourceHash] binary(32) NOT NULL,
+    [Resource] nvarchar(max) NOT NULL,
+    [Position] int NOT NULL,
+    CONSTRAINT [PK___PREFIX__ScopeResources] PRIMARY KEY ([ScopeId], [Position]),
+    CONSTRAINT [FK___PREFIX__ScopeResources_Scopes_ScopeId]
+        FOREIGN KEY ([ScopeId]) REFERENCES [__PREFIX__Scopes] ([Id])
+);
+
+CREATE TABLE [__PREFIX__SchemaVersions] (
+    [Series] nvarchar(10) NOT NULL,
+    [Version] int NOT NULL,
+    [UpdatedUtc] datetime2(6) NOT NULL,
+    CONSTRAINT [PK___PREFIX__SchemaVersions] PRIMARY KEY ([Series])
+);
+
+-- Nullable unique keys use filtered indexes so that any number of NULLs is allowed (design 7, 15.4).
+CREATE UNIQUE INDEX [UK___PREFIX__Applications_ClientId]
+    ON [__PREFIX__Applications] ([ClientId]) WHERE [ClientId] IS NOT NULL;
+CREATE UNIQUE INDEX [UK___PREFIX__Scopes_Name]
+    ON [__PREFIX__Scopes] ([Name]) WHERE [Name] IS NOT NULL;
+CREATE UNIQUE INDEX [UK___PREFIX__Tokens_ReferenceId]
+    ON [__PREFIX__Tokens] ([ReferenceId]) WHERE [ReferenceId] IS NOT NULL;
+
+-- Main table indexes (design 15.4).
+CREATE INDEX [IX___PREFIX__Authorizations_ApplicationId_Status_Subject_Type]
+    ON [__PREFIX__Authorizations] ([ApplicationId], [Status], [Subject], [Type]);
+CREATE INDEX [IX___PREFIX__Authorizations_Subject] ON [__PREFIX__Authorizations] ([Subject]);
+CREATE INDEX [IX___PREFIX__Authorizations_CreationDate] ON [__PREFIX__Authorizations] ([CreationDate]);
+
+CREATE INDEX [IX___PREFIX__Tokens_ApplicationId_Status_Subject_Type]
+    ON [__PREFIX__Tokens] ([ApplicationId], [Status], [Subject], [Type]);
+CREATE INDEX [IX___PREFIX__Tokens_AuthorizationId] ON [__PREFIX__Tokens] ([AuthorizationId]);
+CREATE INDEX [IX___PREFIX__Tokens_Subject] ON [__PREFIX__Tokens] ([Subject]);
+CREATE INDEX [IX___PREFIX__Tokens_CreationDate] ON [__PREFIX__Tokens] ([CreationDate]);
+CREATE INDEX [IX___PREFIX__Tokens_ExpirationDate] ON [__PREFIX__Tokens] ([ExpirationDate]);
+
+-- Auxiliary table candidate indexes: hashes only narrow the candidates, the final check uses the full value with Ordinal comparison (design 15.3).
+CREATE INDEX [IX___PREFIX__ApplicationRedirectUris_UriHash_ApplicationId]
+    ON [__PREFIX__ApplicationRedirectUris] ([UriHash], [ApplicationId]);
+CREATE INDEX [IX___PREFIX__ApplicationPostLogoutRedirectUris_UriHash_ApplicationId]
+    ON [__PREFIX__ApplicationPostLogoutRedirectUris] ([UriHash], [ApplicationId]);
+CREATE INDEX [IX___PREFIX__AuthorizationScopes_ScopeHash_AuthorizationId]
+    ON [__PREFIX__AuthorizationScopes] ([ScopeHash], [AuthorizationId]);
+CREATE INDEX [IX___PREFIX__ScopeResources_ResourceHash_ScopeId]
+    ON [__PREFIX__ScopeResources] ([ResourceHash], [ScopeId]);
+
+INSERT INTO [__PREFIX__SchemaVersions] ([Series], [Version], [UpdatedUtc])
+VALUES (N'7', 1, SYSUTCDATETIME());
+
+COMMIT;
