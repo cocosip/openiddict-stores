@@ -1,0 +1,18 @@
+{
+  "provider": "Sqlite",
+  "series": "7",
+  "entries": [
+    {
+      "type": "install",
+      "server": "SQLite",
+      "minimumVersion": "3.35.0",
+      "state": "available",
+      "sourceSeries": null,
+      "sourceVersion": null,
+      "targetSeries": "7",
+      "targetVersion": 1,
+      "path": "7/install/v0001.sql",
+      "sha256": "549BBE7AE7CD88372F975CF0C59936A0AEF546F8CADC3F53508F6F5F7705C6C4"
+    }
+  ]
+}

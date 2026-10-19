@@ -1,0 +1,155 @@
+-- Sharp.OpenIddict.Stores — SQLite 7 / v0001 install script
+-- Target: SQLite 3.35.0 or later; install into an empty database.
+-- Source version: none (install script); target: Series 7 / Version 1.
+-- Transaction boundary: the whole script runs in a single transaction; any failing statement rolls back, leaving no partial structures.
+-- Identifiers: __PREFIX__ is replaced by the deployment copy using the same validation rules as at runtime, defaulting to OpenIddict.
+-- Foreign keys: SQLite disables foreign key constraints by default, so the connection must execute PRAGMA foreign_keys = ON; all deletions are handled explicitly by the Store.
+
+BEGIN TRANSACTION;
+
+CREATE TABLE "__PREFIX__Applications" (
+    "Id" TEXT(100) NOT NULL,
+    "ConcurrencyToken" TEXT(50) NOT NULL,
+    "ApplicationType" TEXT(50) NULL,
+    "ClientId" TEXT(100) NULL,
+    "ClientSecret" TEXT NULL,
+    "ClientType" TEXT(50) NULL,
+    "ConsentType" TEXT(50) NULL,
+    "DisplayName" TEXT NULL,
+    "DisplayNames" TEXT NULL,
+    "JsonWebKeySet" TEXT NULL,
+    "Permissions" TEXT NULL,
+    "PostLogoutRedirectUris" TEXT NULL,
+    "Properties" TEXT NULL,
+    "RedirectUris" TEXT NULL,
+    "Requirements" TEXT NULL,
+    "Settings" TEXT NULL,
+    CONSTRAINT "PK___PREFIX__Applications" PRIMARY KEY ("Id"),
+    CONSTRAINT "UK___PREFIX__Applications_ClientId" UNIQUE ("ClientId")
+);
+
+CREATE TABLE "__PREFIX__Authorizations" (
+    "Id" TEXT(100) NOT NULL,
+    "ConcurrencyToken" TEXT(50) NOT NULL,
+    "ApplicationId" TEXT(100) NULL,
+    "CreationDate" TEXT NULL,
+    "Properties" TEXT NULL,
+    "Scopes" TEXT NULL,
+    "Status" TEXT(50) NULL,
+    "Subject" TEXT(400) NULL,
+    "Type" TEXT(50) NULL,
+    CONSTRAINT "PK___PREFIX__Authorizations" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK___PREFIX__Authorizations_Applications_ApplicationId"
+        FOREIGN KEY ("ApplicationId") REFERENCES "__PREFIX__Applications" ("Id") ON DELETE RESTRICT
+);
+
+CREATE TABLE "__PREFIX__Scopes" (
+    "Id" TEXT(100) NOT NULL,
+    "ConcurrencyToken" TEXT(50) NOT NULL,
+    "Description" TEXT NULL,
+    "Descriptions" TEXT NULL,
+    "DisplayName" TEXT NULL,
+    "DisplayNames" TEXT NULL,
+    "Name" TEXT(200) NULL,
+    "Properties" TEXT NULL,
+    "Resources" TEXT NULL,
+    CONSTRAINT "PK___PREFIX__Scopes" PRIMARY KEY ("Id"),
+    CONSTRAINT "UK___PREFIX__Scopes_Name" UNIQUE ("Name")
+);
+
+CREATE TABLE "__PREFIX__Tokens" (
+    "Id" TEXT(100) NOT NULL,
+    "ConcurrencyToken" TEXT(50) NOT NULL,
+    "ApplicationId" TEXT(100) NULL,
+    "AuthorizationId" TEXT(100) NULL,
+    "CreationDate" TEXT NULL,
+    "ExpirationDate" TEXT NULL,
+    "Payload" TEXT NULL,
+    "Properties" TEXT NULL,
+    "RedemptionDate" TEXT NULL,
+    "ReferenceId" TEXT(100) NULL,
+    "Status" TEXT(50) NULL,
+    "Subject" TEXT(400) NULL,
+    "Type" TEXT(150) NULL,
+    CONSTRAINT "PK___PREFIX__Tokens" PRIMARY KEY ("Id"),
+    CONSTRAINT "UK___PREFIX__Tokens_ReferenceId" UNIQUE ("ReferenceId"),
+    CONSTRAINT "FK___PREFIX__Tokens_Applications_ApplicationId"
+        FOREIGN KEY ("ApplicationId") REFERENCES "__PREFIX__Applications" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK___PREFIX__Tokens_Authorizations_AuthorizationId"
+        FOREIGN KEY ("AuthorizationId") REFERENCES "__PREFIX__Authorizations" ("Id") ON DELETE RESTRICT
+);
+
+CREATE TABLE "__PREFIX__ApplicationRedirectUris" (
+    "ApplicationId" TEXT(100) NOT NULL,
+    "UriHash" BLOB NOT NULL,
+    "Uri" TEXT NOT NULL,
+    "Position" INTEGER NOT NULL,
+    CONSTRAINT "PK___PREFIX__ApplicationRedirectUris" PRIMARY KEY ("ApplicationId", "Position"),
+    CONSTRAINT "FK___PREFIX__ApplicationRedirectUris_Applications_ApplicationId"
+        FOREIGN KEY ("ApplicationId") REFERENCES "__PREFIX__Applications" ("Id") ON DELETE RESTRICT
+);
+
+CREATE TABLE "__PREFIX__ApplicationPostLogoutRedirectUris" (
+    "ApplicationId" TEXT(100) NOT NULL,
+    "UriHash" BLOB NOT NULL,
+    "Uri" TEXT NOT NULL,
+    "Position" INTEGER NOT NULL,
+    CONSTRAINT "PK___PREFIX__ApplicationPostLogoutRedirectUris" PRIMARY KEY ("ApplicationId", "Position"),
+    CONSTRAINT "FK___PREFIX__ApplicationPostLogoutRedirectUris_Applications_ApplicationId"
+        FOREIGN KEY ("ApplicationId") REFERENCES "__PREFIX__Applications" ("Id") ON DELETE RESTRICT
+);
+
+CREATE TABLE "__PREFIX__AuthorizationScopes" (
+    "AuthorizationId" TEXT(100) NOT NULL,
+    "ScopeHash" BLOB NOT NULL,
+    "Scope" TEXT NOT NULL,
+    "Position" INTEGER NOT NULL,
+    CONSTRAINT "PK___PREFIX__AuthorizationScopes" PRIMARY KEY ("AuthorizationId", "Position"),
+    CONSTRAINT "FK___PREFIX__AuthorizationScopes_Authorizations_AuthorizationId"
+        FOREIGN KEY ("AuthorizationId") REFERENCES "__PREFIX__Authorizations" ("Id") ON DELETE RESTRICT
+);
+
+CREATE TABLE "__PREFIX__ScopeResources" (
+    "ScopeId" TEXT(100) NOT NULL,
+    "ResourceHash" BLOB NOT NULL,
+    "Resource" TEXT NOT NULL,
+    "Position" INTEGER NOT NULL,
+    CONSTRAINT "PK___PREFIX__ScopeResources" PRIMARY KEY ("ScopeId", "Position"),
+    CONSTRAINT "FK___PREFIX__ScopeResources_Scopes_ScopeId"
+        FOREIGN KEY ("ScopeId") REFERENCES "__PREFIX__Scopes" ("Id") ON DELETE RESTRICT
+);
+
+CREATE TABLE "__PREFIX__SchemaVersions" (
+    "Series" TEXT(10) NOT NULL,
+    "Version" INTEGER NOT NULL,
+    "UpdatedUtc" TEXT NOT NULL,
+    CONSTRAINT "PK___PREFIX__SchemaVersions" PRIMARY KEY ("Series")
+);
+
+-- Main table indexes (design 15.4).
+CREATE INDEX "IX___PREFIX__Authorizations_ApplicationId_Status_Subject_Type"
+    ON "__PREFIX__Authorizations" ("ApplicationId", "Status", "Subject", "Type");
+CREATE INDEX "IX___PREFIX__Authorizations_Subject" ON "__PREFIX__Authorizations" ("Subject");
+CREATE INDEX "IX___PREFIX__Authorizations_CreationDate" ON "__PREFIX__Authorizations" ("CreationDate");
+
+CREATE INDEX "IX___PREFIX__Tokens_ApplicationId_Status_Subject_Type"
+    ON "__PREFIX__Tokens" ("ApplicationId", "Status", "Subject", "Type");
+CREATE INDEX "IX___PREFIX__Tokens_AuthorizationId" ON "__PREFIX__Tokens" ("AuthorizationId");
+CREATE INDEX "IX___PREFIX__Tokens_Subject" ON "__PREFIX__Tokens" ("Subject");
+CREATE INDEX "IX___PREFIX__Tokens_CreationDate" ON "__PREFIX__Tokens" ("CreationDate");
+CREATE INDEX "IX___PREFIX__Tokens_ExpirationDate" ON "__PREFIX__Tokens" ("ExpirationDate");
+
+-- Auxiliary table candidate indexes: hashes only narrow the candidates, the final check uses the full value with Ordinal comparison (design 15.3).
+CREATE INDEX "IX___PREFIX__ApplicationRedirectUris_UriHash_ApplicationId"
+    ON "__PREFIX__ApplicationRedirectUris" ("UriHash", "ApplicationId");
+CREATE INDEX "IX___PREFIX__ApplicationPostLogoutRedirectUris_UriHash_ApplicationId"
+    ON "__PREFIX__ApplicationPostLogoutRedirectUris" ("UriHash", "ApplicationId");
+CREATE INDEX "IX___PREFIX__AuthorizationScopes_ScopeHash_AuthorizationId"
+    ON "__PREFIX__AuthorizationScopes" ("ScopeHash", "AuthorizationId");
+CREATE INDEX "IX___PREFIX__ScopeResources_ResourceHash_ScopeId"
+    ON "__PREFIX__ScopeResources" ("ResourceHash", "ScopeId");
+
+INSERT INTO "__PREFIX__SchemaVersions" ("Series", "Version", "UpdatedUtc")
+VALUES ('7', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+
+COMMIT;

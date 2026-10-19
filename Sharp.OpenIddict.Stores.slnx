@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Sharp.OpenIddict.Stores.Models/Sharp.OpenIddict.Stores.Models.csproj" />
+    <Project Path="src/Sharp.OpenIddict.Stores/Sharp.OpenIddict.Stores.csproj" />
+    <Project Path="src/Sharp.OpenIddict.Stores.SqlServer/Sharp.OpenIddict.Stores.SqlServer.csproj" />
+    <Project Path="src/Sharp.OpenIddict.Stores.PostgreSql/Sharp.OpenIddict.Stores.PostgreSql.csproj" />
+    <Project Path="src/Sharp.OpenIddict.Stores.MySql/Sharp.OpenIddict.Stores.MySql.csproj" />
+    <Project Path="src/Sharp.OpenIddict.Stores.Sqlite/Sharp.OpenIddict.Stores.Sqlite.csproj" />
+    <Project Path="src/Sharp.OpenIddict.Stores.Oracle/Sharp.OpenIddict.Stores.Oracle.csproj" />
+    <Project Path="src/Sharp.OpenIddict.Stores.Dm/Sharp.OpenIddict.Stores.Dm.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Sharp.OpenIddict.Stores.Tests/Sharp.OpenIddict.Stores.Tests.csproj" />
+    <Project Path="tests/Sharp.OpenIddict.Stores.IntegrationTests/Sharp.OpenIddict.Stores.IntegrationTests.csproj" />
+    <Project Path="tests/Sharp.OpenIddict.Stores.Server.Tests/Sharp.OpenIddict.Stores.Server.Tests.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/Sharp.OpenIddict.Stores.Sample.Server/Sharp.OpenIddict.Stores.Sample.Server.csproj" />
+    <Project Path="samples/Sharp.OpenIddict.Stores.Sample.Client/Sharp.OpenIddict.Stores.Sample.Client.csproj" />
+  </Folder>
+</Solution>

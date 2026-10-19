@@ -1,20 +1,30 @@
-# Sharp.OpenIddict.Dapper 项目设计文档
+# Sharp.OpenIddict.Stores 项目设计文档
 
-文档版本：1.4。创建日期：2026-10-19。修订日期：2026-10-19。状态：设计评审稿。
+文档版本：1.9。创建日期：2026-10-19。修订日期：2026-10-19。状态：设计评审稿。
 
 本文是项目的正式设计文档和后续开发依据，覆盖产品范围、兼容版本、公共 API、持久化结构、数据库差异、运行语义、测试、示例与交付标准。它不是临时计划或执行记录。评审通过后以本文作为实现基线；实现若需要改变公开合同、数据库结构或支持范围，先修订本文，再修改代码与测试。
 
 ## 1. 目标与已确认要求
 
-为 OpenIddict 提供基于 Dapper 的关系数据库存储扩展，沿用 OpenIddict 原生 Manager、Store、Descriptor 和依赖注入扩展点；通过原生选项禁用实体缓存，保证批量变更后的重新查询读取数据库。
+为 OpenIddict 提供直接使用 SQL 的关系数据库存储扩展，沿用 OpenIddict 原生 Manager、Store、Descriptor 和依赖注入扩展点；通过原生选项禁用实体缓存，保证批量变更后的重新查询读取数据库。
 
-- 所有发布包以 `Sharp` 开头，统一采用 `Sharp.OpenIddict.Dapper.*`。
+- 所有发布包以 `Sharp` 开头，统一采用 `Sharp.OpenIddict.Stores.*`。
 - 首版数据库覆盖 SQL Server、PostgreSQL、MySQL/MariaDB、SQLite、Oracle、达梦。
-- 提供 .NET Standard 2.0、2.1、.NET 8、9、10 的兼容系列，并提供面向 OpenIddict 8.x 的独立系列。
+- 提供 .NET Standard 2.0、2.1、.NET 8、9、10 的兼容系列（基于 OpenIddict 7.7.2 稳定版）；OpenIddict 8.x 系列等上游发布稳定版后另行启动。
 - 所有测试、示例和可运行辅助程序使用 .NET 10，解决方案使用 `.slnx`。
 - 本文明确给出技术选型，不把尚待评审的设计决定表述为用户已经确认的要求。
 
-扩展负责 Application、Authorization、Scope、Token，以及 8.x 新增的 Resource、Session 的持久化。用户、密码、角色、用户登录界面和 ASP.NET Core Identity 存储不属于此扩展。
+### 1.1 命名与依赖定位
+
+本项目的交付物是 OpenIddict 四个 Store 契约的实现，底层如何访问数据库属于内部实现细节。命名据此确定，不绑定具体数据访问技术：
+
+- 包名 `Sharp.OpenIddict.Stores.*` 与上游 `OpenIddict.EntityFrameworkCore` 处于同一层级、描述同一件事，消费者从包名即可判断用途。
+- 类型前缀为 `OpenIddictStore`（如 `OpenIddictStoreToken`、`OpenIddictStoreBase`），命名空间为 `Sharp.OpenIddict.Stores.*`，与包名三层一致。
+- 旧名 `Sharp.OpenIddict.Dapper.*` / `OpenIddictDapper*` 已废弃。早期按 Dapper 命名，但实测 Dapper 的 API 只出现在一个文件、共 8 处调用；实体映射、谓词翻译、方言 SQL 生成与逐行异步读取全部由本项目自行实现。继续用 Dapper 命名会错误暗示依赖边界。
+- Dapper 目前仍是内部实现细节，**只允许出现在查询执行层内部**；其余代码只依赖 `DbConnection`、`DbCommand`、`DbDataReader` 等 ADO.NET 抽象。是否以及何时移除该依赖，取决于后续方言验收结果，见第 9.3 节。
+
+
+首版（7.x 兼容系列）负责 Application、Authorization、Scope、Token 四类实体的持久化。OpenIddict 8.x 的 Resource、Session 尚无稳定版依赖，暂不纳入实施范围；用户、密码、角色、用户登录界面和 ASP.NET Core Identity 存储不属于此扩展。
 
 ## 2. 源码调研与版本边界
 
@@ -22,13 +32,15 @@
 
 | 参考版本 | 本地证据 | 存储接口 | 与本项目的关系 |
 | --- | --- | --- | --- |
-| 7.7.2 | 标签，提交 `950cb13b` | Application、Authorization、Scope、Token | Core 提供全部五个要求的目标框架，作为兼容系列基线 |
-| 8.0.0-preview.4 | 标签，提交 `644eab6a` | 上述四类，加 Resource、Session | 作为可复现的 8.x 设计基线，选用其 .NET 10 资产 |
+| 7.7.2 | 标签，提交 `950cb13b` | Application、Authorization、Scope、Token | **唯一实施基线**：已发布稳定版，Core 提供全部五个要求的目标框架 |
+| 8.0.0-preview.4 | 标签，提交 `644eab6a` | 上述四类，加 Resource、Session | 仅作演进方向参考，**不作为依赖**：8.x 尚无稳定版，本项目不引用预览包 |
 | 当前 HEAD | `ab23a162`，Versions.props 标记 preview.5 | 六类存储，接口也有变化 | 用来了解发展方向，不把尚未核实发布的 HEAD 当成 NuGet 依赖 |
 
-8.x 当前的 Core 还包含 .NET Framework 4.8 目标，但没有 .NET Standard、.NET 8、.NET 9 目标；本项目不新增 .NET Framework 专用目标。不能把扩展项目的 TargetFrameworks 改成五个值，就宣称 OpenIddict 8 支持这五个平台。
+本项目只依赖稳定版包，不引用任何预览版依赖。8.x 当前没有稳定版本发布，因此 8.x 主线暂不实施；7.7.2 是唯一实现基线，其存储合同为 Application、Authorization、Scope、Token 四类。
 
-8.x 的变化也不止增加两个实体：例如 `CountAsync` 查询回调增加状态参数，Authorization/Token 的 `FindAsync` 改为元组参数，Token 增加 SessionId 访问方法。两个主版本需要分别对接真实接口。
+8.x 当前的 Core 还包含 .NET Framework 4.8 目标，但没有 .NET Standard、.NET 8、.NET 9 目标。7.7.2 的 Core 则同时提供 `netstandard2.0`、`netstandard2.1`、`net8.0`、`net9.0`、`net10.0` 资产，因此五目标只对 7.7.2 成立。
+
+将来升级到 8.x 稳定版时，变化也不止增加两个实体：例如 `CountAsync` 查询回调增加状态参数，Authorization/Token 的 `FindAsync` 改为元组参数，Token 增加 SessionId 访问方法。两个主版本需要分别对接真实接口，不在一个程序集里用条件编译兼容。
 
 主要参考位置：
 
@@ -43,14 +55,16 @@
 
 ## 3. 分版本发布方案
 
-建议同一仓库采用两个长期分支，每个分支都只有一套同名工程和一个 `Sharp.OpenIddict.Dapper.slnx`。
+建议同一仓库采用两个长期分支，每个分支都只有一套同名工程和一个 `Sharp.OpenIddict.Stores.slnx`。
 
 | 项目系列 | 建议分支 | NuGet 版本示意 | OpenIddict 依赖 | 发布类库目标 |
 | --- | --- | --- | --- | --- |
-| 兼容系列 | `release/7.x` | `7.0.0` | 开发/验证锁定 7.7.2；发布依赖范围排除 8.x，含其预览版 | `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0` |
-| 主线系列 | `main` | `8.0.0-preview.1` | 锁定选定的 8.0 预览包；正式版发布后单独升级 | `net10.0` |
+| 兼容系列（当前实施） | `release/7.x` | `7.0.0` | 锁定 7.7.2 稳定版；发布依赖范围 `[7.7.2,8.0.0-0)`，排除 8.x 及其预览版 | `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0` |
+| 主线系列（暂不实施） | `main` | 待定 | 需等 8.x 稳定版发布后再定；不锁定预览包 | `net10.0` |
 
-包的主版本表达 OpenIddict 兼容系列，次版本不必与上游保持一致。例如扩展 7.0.0 可以依赖 OpenIddict 7.7.2。7.x 发布范围可采用 `[7.7.2,8.0.0-0)`，不能用会允许 8.0 预览版进入的宽范围。8.x 预览阶段精确锁定所选上游预览依赖，扩展也以预览包发布。
+包的主版本表达 OpenIddict 兼容系列，次版本不必与上游保持一致。例如扩展 7.0.0 依赖 OpenIddict 7.7.2。7.x 发布范围采用 `[7.7.2,8.0.0-0)`，不能用会允许 8.0 预览版进入的宽范围。
+
+8.x 主线暂不实施：上游尚无稳定版，本项目不引用预览包，因此不为其创建工程骨架、不锁定预览依赖，也不发布预览包。等 8.x 稳定版发布并核实存储合同后再单独启动。
 
 不建议在一个程序集里同时引用 OpenIddict 7 和 8，也不通过大量 `#if OPENIDDICT8` 兼容两套公共合同。通用 SQL、序列化、方言和测试修复可以在分支间移植；Store、实体和 DI 注册分别编译。实际创建分支留到实施阶段。
 
@@ -60,47 +74,92 @@
 
 | 包名 | 职责 |
 | --- | --- |
-| `Sharp.OpenIddict.Dapper.Models` | 默认 POCO 实体，不依赖 EF Core 或数据库驱动 |
-| `Sharp.OpenIddict.Dapper` | Store 实现、Builder、Options、连接生命周期、查询和序列化 |
-| `Sharp.OpenIddict.Dapper.SqlServer` | SQL Server 方言、参数差异、建表与升级脚本 |
-| `Sharp.OpenIddict.Dapper.PostgreSql` | PostgreSQL 对应实现 |
-| `Sharp.OpenIddict.Dapper.MySql` | MySQL 与 MariaDB 对应实现及分别验收 |
-| `Sharp.OpenIddict.Dapper.Sqlite` | SQLite 对应实现 |
-| `Sharp.OpenIddict.Dapper.Oracle` | Oracle 对应实现，包含大文本参数处理 |
-| `Sharp.OpenIddict.Dapper.Dm` | 达梦独立方言与参数处理 |
+| `Sharp.OpenIddict.Stores.Models` | 默认 POCO 实体，不依赖 EF Core 或数据库驱动 |
+| `Sharp.OpenIddict.Stores` | Store 实现、Builder、Options、连接生命周期、查询和序列化 |
+| `Sharp.OpenIddict.Stores.SqlServer` | SQL Server 方言、参数差异、建表与升级脚本 |
+| `Sharp.OpenIddict.Stores.PostgreSql` | PostgreSQL 对应实现 |
+| `Sharp.OpenIddict.Stores.MySql` | MySQL 与 MariaDB 对应实现及分别验收 |
+| `Sharp.OpenIddict.Stores.Sqlite` | SQLite 对应实现 |
+| `Sharp.OpenIddict.Stores.Oracle` | Oracle 对应实现，包含大文本参数处理 |
+| `Sharp.OpenIddict.Stores.Dm` | 达梦独立方言与参数处理 |
 
 provider 引用核心包，核心包引用 Models、OpenIddict.Core 和 Dapper。产品代码不依赖 EF、ABP、Dapper.Contrib 或另一套 ORM，也不额外发布空的 Abstractions 包。
 
 建议目录：
 
 ```text
-Sharp.OpenIddict.Dapper.slnx
+Sharp.OpenIddict.Stores.slnx
 global.json
 Directory.Build.props
 Directory.Packages.props
 src/
-  Sharp.OpenIddict.Dapper.Models/
-  Sharp.OpenIddict.Dapper/
+  Sharp.OpenIddict.Stores.Models/
+  Sharp.OpenIddict.Stores/
     Stores/
     Queries/
-  Sharp.OpenIddict.Dapper.SqlServer/
-  Sharp.OpenIddict.Dapper.PostgreSql/
-  Sharp.OpenIddict.Dapper.MySql/
-  Sharp.OpenIddict.Dapper.Sqlite/
-  Sharp.OpenIddict.Dapper.Oracle/
-  Sharp.OpenIddict.Dapper.Dm/
+  Sharp.OpenIddict.Stores.SqlServer/
+  Sharp.OpenIddict.Stores.PostgreSql/
+  Sharp.OpenIddict.Stores.MySql/
+  Sharp.OpenIddict.Stores.Sqlite/
+  Sharp.OpenIddict.Stores.Oracle/
+  Sharp.OpenIddict.Stores.Dm/
 tests/
-  Sharp.OpenIddict.Dapper.Tests/
-  Sharp.OpenIddict.Dapper.IntegrationTests/
-  Sharp.OpenIddict.Dapper.Server.Tests/
+  Sharp.OpenIddict.Stores.Tests/
+  Sharp.OpenIddict.Stores.IntegrationTests/
+  Sharp.OpenIddict.Stores.Server.Tests/
 samples/
-  Sharp.OpenIddict.Dapper.Sample.Server/
-  Sharp.OpenIddict.Dapper.Sample.Client/
+  Sharp.OpenIddict.Stores.Sample.Server/
+  Sharp.OpenIddict.Stores.Sample.Client/
 scripts/
 docs/
 ```
 
-使用 .NET 10 SDK、Nullable、集中包版本管理。7.x 按 TFM 管理 Microsoft.Extensions 等依赖，避免给 net8.0 消费者强行引入另一主版本的依赖体系。Dapper 精确版本在实施前锁定；本机已有 2.1.89，包含 netstandard2.0、net8.0、net10.0 资产，可作为候选而非未经检查的最终选型。
+使用 .NET 10 SDK、Nullable、集中包版本管理。7.x 按 TFM 管理 Microsoft.Extensions 等依赖，避免给 net8.0 消费者强行引入另一主版本的依赖体系。Dapper 已锁定 2.1.89：它提供 `netstandard2.0`、`net8.0`、`net10.0` 资产，net9.0 宿主解析到 net8.0 资产，这属于正常降级而非缺陷。
+
+### 4.1 依赖版本与中央包管理
+
+依赖版本必须只有一个权威来源，不散落在各工程文件里：
+
+- 仓库根目录 `Directory.Packages.props` 启用 `ManagePackageVersionsCentrally`，用 `PackageVersion` 集中登记所有直接依赖和需要提升的传递依赖版本。任何 `.csproj` 不得再写带 `Version` 的 `PackageReference`；出现即视为违反本节，须由构建与 CI 检查拒绝。
+- 启用 `CentralPackageTransitivePinningEnabled`，把需要覆盖的传递依赖（例如被上游引入的过时版本、存在已知漏洞的版本）提升为中央版本。未登记的传递依赖保留上游解析结果，但仍参与 NuGet 审核。
+- 产品自身版本（`VersionPrefix`/`VersionSuffix`）在根 `Directory.Build.props` 统一定义，同系列八个包使用同一版本；不按工程分别设置版本号。
+- 精确版本经第 2 节核实后写入中央清单。当前只有 7.x 一个实施分支，`Directory.Packages.props` 就是唯一清单；8.x 稳定版发布后另建分支并维护自己的中央清单，同一分支内不允许工程级版本例外。
+- 中央清单只允许稳定版本。任何带 `-` 的预发布版本（如 `8.0.0-preview.4`）都不得出现在 `PackageVersion` 中，由单元测试检查拒绝。
+- 数据库驱动只被测试、示例和可运行工具引用，不进入产品包依赖；测试工程使用的驱动版本同样来自中央清单，缺环境时明确跳过，不通过临时改版本或工程级覆盖绕过。
+- 版本升级是一次原子变更：只修改中央清单，然后重新还原、构建并运行受影响测试。NuGet 审核发现的已知漏洞包必须在中央清单中提升到修复版本，不能靠关闭审计或 `NoWarn` 掩盖。
+- 检查项：工程文件不含 `Version` 属性；包内依赖版本与中央清单一致；产品 nupkg 的依赖组不含 ADO.NET 驱动、EF Core 或其他 ORM。
+
+#### 4.1.1 按 TFM 的依赖版本（7.x 五目标）
+
+同一条依赖不能在所有目标框架上用同一个版本。为 netstandard2.0/2.1、net8.0、net9.0、net10.0 生成的多目标程序集，每个 TFM 的依赖组必须与该 TFM 的宿主代际匹配，不能把 net10 时代的包喂给 netstandard 或 net8 资产，否则消费者会被强制升级 Microsoft.Extensions 依赖体系，产生版本冲突或需要绑定重定向：
+
+| TFM | Microsoft.Extensions.* 版本线 | 与上游的关系 |
+| --- | --- | --- |
+| netstandard2.0 | 8.0.x | 与 OpenIddict 7.7.2 的 `.NETStandard2.0` 依赖组一致，不得升高到 9.x/10.x |
+| netstandard2.1 | 8.0.x | 与 OpenIddict 7.7.2 的 `.NETStandard2.1` 依赖组一致 |
+| net8.0 | 8.0.x | 与 OpenIddict 7.7.2 的 `net8.0` 依赖组一致 |
+| net9.0 | 9.0.x | 与 OpenIddict 7.7.2 的 `net9.0` 依赖组一致 |
+| net10.0 | 10.0.x | 与 OpenIddict 7.7.2 的 `net10.0` 依赖组一致 |
+
+当前实际锁定的精确版本（全部稳定版）：
+
+| TFM | DependencyInjection.Abstractions | Logging.Abstractions | Options |
+| --- | --- | --- | --- |
+| netstandard2.0 / netstandard2.1 / net8.0 | 8.0.2 | 8.0.2 | 8.0.2 |
+| net9.0 | 9.0.21 | 9.0.21 | 9.0.21 |
+| net10.0 | 10.0.13 | 10.0.13 | 10.0.13 |
+
+`System.Security.Cryptography.Pkcs` 作为传递依赖提升按同一分线锁定（8.0.1 / 9.0.21 / 10.0.13），用于消除上游传递引入的已知漏洞版本。
+
+规则：
+
+- 每个 TFM 选取该 TFM 上仍受支持的**最低版本线**，且不低于上游同 TFM 依赖组的下限；消费者可以自行解析到更高补丁，本扩展不替消费者锁定高主版本。
+- 8.x 主线只有 `net10.0`，其依赖统一使用 10.0.x；该行在 8.x 稳定版发布并实施后生效，当前不适用。- 在中央包管理中按 TFM 条件登记（`Directory.Packages.props` 中用 `Condition="'$(TargetFramework)' == 'net8.0'"` 的 `ItemGroup` 分别声明），不允许改用工程级 `Version`、`VersionOverride` 或运行时程序集绑定绕过。
+- Dapper 等单一版本即可覆盖全部 TFM 的依赖不必拆分；只有存在按代际发布的依赖（Microsoft.Extensions.*、缓存、日志、选项等）才按 TFM 分线。
+- 打包后检查 nuspec 依赖组：`netstandard2.0`/`netstandard2.1`/`net8.0` 组不得出现 9.x/10.x 的 Microsoft.Extensions.*，`net9.0` 组不得出现 10.x；主线 `net10.0` 组不得出现低代际依赖。7.7.2 基线已实测通过：`Sharp.OpenIddict.Stores` 7.0.0 的 nuspec 五个依赖组分别为 8.0.2 / 8.0.2 / 8.0.2 / 9.0.21 / 10.0.13，OpenIddict 依赖统一为 7.7.2。
+- 只在全局组登记 `Microsoft.Extensions.DependencyInjection` 这类会向下拉取更高代际的包，会把 10.0.x 注入低 TFM 并触发 NU1109 降级错误；因此这类提升必须收进对应 TFM 的条件组，或直接不提升，让上游解析结果保留。
+- 数据库驱动只被测试、示例引用时同样受宿主 TFM 限制：驱动缺少某 TFM 资产（例如 Oracle 驱动只有 `net8.0`/`netstandard2.1`）时，在该 TFM 上不可用，必须在支持矩阵和使用说明中标注，不得用版本提升假装支持。
+- 测试、示例和可运行工具固定 `net10.0`，统一引用 10.0.x；它们引用多目标类库时由 NuGet 选择 `net10.0` 资产，这条不构成“已在 net8/net9 原生运行”的证据。
 
 ## 5. 驱动与数据库支持范围
 
@@ -119,6 +178,27 @@ provider 包原则上只携带方言、参数适配和 SQL 资源，不强制传
 
 必须区分“扩展程序集支持某 TFM”和“驱动支持某宿主运行时”。本机 Oracle 23.x 包包含 netstandard2.1/net8.0，Npgsql 10.x 包包含 net8.0/net9.0/net10.0；不能拿它们作为 netstandard2.0 驱动兼容性的证明。
 
+### 5.1 驱动与 TFM 实测矩阵
+
+下表是本机在锁定版本下**实际检查包资产**得到的结论（`~/.nuget/packages/<id>/<version>/lib`），不是从文档推断的。`lib` 目录存在某 TFM 只代表该驱动在该运行时上“可被还原并加载”，不代表已连接真实数据库；连接验收见第 5 节的其他任务。
+
+| 驱动 | 锁定版本 | 驱动提供的 `lib` TFM | 可用于 ns2.0 | 可用于 ns2.1 | 可用于 net8.0 | net9.0 | net10.0 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Microsoft.Data.SqlClient | 7.1.1 | net462、netstandard2.0、net8.0、net9.0 | 是 | 是（回退 ns2.0） | 是 | 是 | **否**（无 net10 资产） |
+| Npgsql | 10.0.3 | net8.0、net9.0、net10.0 | 否 | 否 | 是 | 是 | 是 |
+| MySqlConnector | 2.6.2 | net462、net471、net48、net6.0、net8.0、net9.0、net10.0、netstandard2.0、netstandard2.1 | 是 | 是 | 是 | 是 | 是 |
+| Microsoft.Data.Sqlite | 10.0.13 | netstandard2.0 | 是 | 是（回退 ns2.0） | 是 | 是 | 是（回退 ns2.0） |
+| Oracle.ManagedDataAccess.Core | 23.26.301 | net8.0、netstandard2.1 | **否** | 是 | 是 | 是（回退 ns2.1） | 是（回退 ns2.1） |
+| DM.DmProvider | 8.3.1.47463 | net40、net45、net5.0、net6.0、net7.0、net8.0、net9.0、netcoreapp2.1、netcoreapp3.1、netstandard2.0 | 是 | 是（回退 ns2.0） | 是 | 是 | **否**（无 net10 资产） |
+
+由此得到两条必须写进使用说明的约束：
+
+- **netstandard2.0 宿主无法使用 Npgsql 与 Oracle 驱动**：前者不提供该 TFM 资产，后者最低只到 netstandard2.1。扩展本身仍为该 TFM 产出程序集，但 PostgreSQL/Oracle provider 在 ns2.0 宿主上不可用，必须在支持矩阵中显式标注而不是留给消费者自己发现。
+- **net10 宿主无法使用 SqlClient 7.1.1 与 DM.DmProvider**：二者都没有 net10 资产。这意味着 SQL Server 与达梦的**真实连接验收无法在 net10 上进行**，只能在 net8.0/net9.0 宿主中验证；本文档不把编译通过当作连接验证。
+
+未实测的组合（包括所有“回退”情形是否在真实服务器上语义正确）一律标记为未验证，不列入正式支持范围。这张表由 `PackageAssetTests` 中的资产/依赖检查与实际包内容交叉验证，驱动版本变化时必须重新检查。
+
+
 7.x 的存储与方言包保持五个 TFM；宿主选择适配自身运行时的驱动。README 按“OpenIddict 系列 × 扩展 TFM × 宿主 × 驱动版本 × 服务器版本”列出实际验证组合。未验证的旧驱动组合明确标记，不把早期有 netstandard2.0 资产的驱动自动列入正式支持范围。
 
 方言负责引号、参数名、分页、批量删除和参数类型。对 Oracle/达梦大文本、按名称绑定等标准 ADO.NET 不能完整表达的行为，使用 provider 内部的小型适配器，按实际 command/parameter 类型设置公开驱动属性并缓存必要元数据；不引入全局驱动状态。正式支持只覆盖通过真实驱动验证的实现。
@@ -131,7 +211,7 @@ provider 包原则上只携带方言、参数适配和 SQL 资源，不强制传
 
 原生实体缓存位于 DI 作用域内；批量 Revoke 直接更新 Store，不会逐项移除缓存中的实体。只轮换数据库并发标记无法阻止同一作用域再次返回旧状态。因此首版要求实体缓存保持禁用，对最终生效选项进行校验，重新启用时在首次使用 Manager/Store 前报配置错误，不依赖配置调用顺序。禁用缓存不使已返回的 POCO 自动刷新，也不使撤销成为所有在途请求的同步屏障。
 
-建议提供 `OpenIddictDapperBuilder`、`OpenIddictDapperOptions`、`IOpenIddictDapperConnectionFactory` 和一个窄职责的数据库方言接口。连接工厂接受取消信号并创建可由本扩展释放的新 `DbConnection`。方言实例是无状态的，每个已配置的存储实例绑定自己的方言，进程里不存在“当前数据库”静态变量。
+建议提供 `OpenIddictStoreBuilder`、`OpenIddictStoreOptions`、`IOpenIddictStoreConnectionFactory` 和一个窄职责的数据库方言接口。连接工厂接受取消信号并创建可由本扩展释放的新 `DbConnection`。方言实例是无状态的，每个已配置的存储实例绑定自己的方言，进程里不存在“当前数据库”静态变量。
 
 API 示意，尚非已经存在的可调用 API：
 
@@ -156,9 +236,9 @@ builder.Services.AddOpenIddict()
 
 ## 7. 数据模型与查询索引
 
-7.x 包含四张主表；8.x 再增加 `OpenIddictResources`、`OpenIddictSessions`，以及 Token.SessionId。默认主表名称沿用 OpenIddict 常用名称，但这不表示可以直接操作既有 EF 表。
+首版（7.x）包含四张主表：Applications、Authorizations、Scopes、Tokens。OpenIddict 8.x 的 `OpenIddictResources`、`OpenIddictSessions` 及 Token.SessionId 待其稳定版发布后再纳入。默认主表名称沿用 OpenIddict 常用名称，但这不表示可以直接操作既有 EF 表。
 
-字段按目标版本 Store/Descriptor 逐项覆盖，包括 ClientSecret、JsonWebKeySet、Permissions、Requirements、Settings、本地化名称、Properties，以及 8.x 的 LoginId、SessionId 等。主键建议保持上游默认最大长度 100，并发标记 50，ClientId 100、Scope/Resource Name 200、Subject 400；其余长度以锁定版本配置为准。
+字段按 7.7.2 的 Store/Descriptor 逐项覆盖，包括 ClientSecret、JsonWebKeySet、Permissions、Requirements、Settings、本地化名称、Properties。主键建议保持上游默认最大长度 100，并发标记 50，ClientId 100、Scope Name 200、Subject 400；其余长度以锁定版本配置为准。
 
 集合和字典保存为 JSON 文本，不依赖数据库原生 JSON 类型。对必须参与查找的集合，增加四张事务维护的辅助索引表：
 
@@ -170,10 +250,9 @@ builder.Services.AddOpenIddict()
 | ScopeResources | 查询包含给定 Resource 名称的 Scope |
 
 JSON 是集合值的权威来源；辅助表只保存去重后的查询索引，主表和辅助表必须在同一事务更新。这样六类数据库都可以使用索引查询，不依赖 `LIKE '%uri%'`、整表 JSON 扫描或各家不同的 JSON 运算符。
-
 四张辅助表统一以所属实体 ID 和 Position 为主键，完整集合值保存为 LargeText，另存 SHA-256 二进制摘要并建立非唯一查找索引。集合值按 Ordinal 去重，不添加长度 200 等原生合同没有的限制，也不以数据库字符串比较定义集合元素身份。摘要只用于缩小候选集，返回前必须与权威 JSON 中的完整值做 Ordinal 比较；摘要碰撞不能造成插入冲突、漏项或误匹配。不对 URI、Scope 或 Resource 值做大小写、尾随空格或其他标准化。
 
-关键约束：ClientId、Scope.Name、Resource.Name、非空 Token.ReferenceId 唯一。SQL Server 等需要为可空唯一键使用合适的过滤索引，允许多个 NULL ReferenceId。标识符列选用区分大小写、重音的物理比较规则；普通字符串的查询和条件写入还必须遵守第 16.1.1 节，不能只靠排序规则或原生 Manager 的附加过滤保证精确匹配。
+关键约束：ClientId、Scope.Name、非空 Token.ReferenceId 唯一。SQL Server 等需要为可空唯一键使用合适的过滤索引，允许多个 NULL ReferenceId。标识符列选用区分大小写、重音的物理比较规则；普通字符串的查询和条件写入还必须遵守第 16.1.1 节，不能只靠排序规则或原生 Manager 的附加过滤保证精确匹配。
 
 时间统一为 UTC；使用各方言对应的原生时间类型，读出后显式恢复 UTC 语义。SQLite 使用固定格式 UTC 文本。不同数据库的时间精度在合同测试中明确，不能让驱动把 UTC 当成本地时间。Oracle 的空字符串/NULL、大文本 CLOB、Unicode、LOB 读取必须独立测试，不隐式承诺所有可选空串在 Oracle 上无损。
 
@@ -187,13 +266,13 @@ Update/Delete 使用 Id 与旧 ConcurrencyToken 进行条件写入，更新成�
 
 包含关联修改时，先在同一事务获得/确认父记录写入权，再修改子表。并发冲突必须回滚全部子表变更，不能先删子表再发现父记录版本不匹配。外键和方言特定锁策略负责阻止关联写入穿过删除窗口。
 
-普通 DeleteAsync 按第 16.2 节的版本矩阵执行。删除 Application 处理直接及间接关联，不能仅按各子表 ApplicationId 删除。删除 Authorization 时，删除所有直接关联 Token；8.x 同时删除关联 Session 及其全部 Token，包括 AuthorizationId 为空或指向其他授权的 Token。单独删除 8.x Session 时，AuthorizationId 为空的关联 Token 删除，AuthorizationId 非空的 Token 保留并清除 SessionId，保留其 Authorization。两种上下文的 Session 关联处理不同，不能复用一套无条件级联规则。Resource 与 Scope.Resources 的名称关系不擅自变成强制级联外键。
+普通 DeleteAsync 按第 16.2 节的删除矩阵执行。删除 Application 处理直接及间接关联，不能仅按各子表 ApplicationId 删除。删除 Authorization 时，删除所有 AuthorizationId 指向它的 Token。Scope 删除同时删除其 ScopeResources 辅助行，但不影响任何独立实体。
 
-凡清空外键但保留的主实体行，必须在同一事务内同时轮换其 ConcurrencyToken，包括单独删除 Session 时保留的 Token，以及第 16.3 节清理路径保留的 Session；旧快照后续 Update 应命中 0 行并抛出原生 ConcurrencyException，而不是重写已删除的外键后触发约束错误。可以批量更新，不要求先加载全部实体；任何失败必须同时回滚外键和并发标记。
+凡清空外键但保留的主实体行，必须在同一事务内同时轮换其 ConcurrencyToken，包括第 16.3 节清理路径保留的行；旧快照后续 Update 应命中 0 行并抛出原生 ConcurrencyException，而不是重写已删除的外键后触发约束错误。可以批量更新，不要求先加载全部实体；任何失败必须同时回滚外键和并发标记。
 
 Revoke 使用数据库批量条件更新，不先加载全部实体。筛选和计数严格按第 16.2.2 节逐方法定义：Token 的 RevokeBy* 排除已撤销行，通用 RevokeAsync 和 Authorization 的 RevokeBy* 不增加这个隐含条件。仅对实际命中行设置 revoked 并轮换并发标记，防止旧实体随后覆盖撤销结果。实体缓存按第 6 节禁用，提交后通过同一作用域或新作用域的原生 Manager 重新查询均读取数据库中的已提交状态；调用前持有的实体仍是旧快照。通过 Manager/Server 路径验证，不只测试裸 Store SQL；不承诺已开始的验证或请求会被追溯中止。
 
-Prune 完整遵循上游条件，而不是简单删除过期行。例如 Token 还要考虑 CreationDate 阈值、inactive/valid 状态和所属 Authorization 状态；Authorization 清理考虑状态、ad-hoc 类型和是否仍有 Token；8.x Session 也有自己的清理条件。采用有上限的小批次，建议每批不超过 500 个 ID，避开 Oracle IN 参数限制及其他数据库参数上限。删除时重检清理条件、使用事务，按实际影响行数返回；数据库错误和取消向上传播。
+Prune 完整遵循上游条件，而不是简单删除过期行。例如 Token 还要考虑 CreationDate 阈值、inactive/valid 状态和所属 Authorization 状态；Authorization 清理考虑状态、ad-hoc 类型和是否仍有 Token。采用有上限的小批次，建议每批不超过 500 个 ID，避开 Oracle IN 参数限制及其他数据库参数上限。删除时重检清理条件、使用事务，按实际影响行数返回；数据库错误和取消向上传播。
 
 默认列表稳定排序并在数据库分页。返回 IAsyncEnumerable 的实现保持真正逐行读取：在低版本目标可使用 Dapper ExecuteReaderAsync、GetRowParser 与 DbDataReader.ReadAsync；连接/reader 存活到枚举结束，取消和提前退出都必须释放。不能把缓冲 QueryAsync 的完整结果包装成“流式”。驱动内部是否真正异步由真实驱动验证，不用 Task.Run 掩盖同步实现。
 
@@ -248,7 +327,22 @@ Dapper 不提供 LINQ provider；OpenIddict 的 CountAsync/GetAsync/ListAsync �
 
 首版不支持 Join、GroupBy、导航展开、任意方法执行、JSON 内部属性和集合表达式，也不支持 LargeText/Json 的内容比较、排序和 IN。它们仍可直接投影返回。此限制对六类数据库一致，避免 Oracle NCLOB 不能直接使用普通等值/ORDER BY 的差异；不以截断 LOB 后比较代替完整值语义。无法翻译时在执行 SQL 前抛出明确的 NotSupportedException，并列明不支持的表达式与列。绝不静默退化为内存执行。
 
-该组件不是通用 LINQ ORM。采用白名单表达式、列名来自固定映射、值全部参数化；null、排序、分页和投影都有合同测试。额外复杂的报表由应用自己的 Dapper 查询承担。README 必须给出支持与拒绝示例，不能宣称兼容任意 IQueryable。
+该组件不是通用 LINQ ORM。采用白名单表达式、列名来自固定映射、值全部参数化；null、排序、分页和投影都有合同测试。额外复杂的报表由应用自己的查询承担。README 必须给出支持与拒绝示例，不能宣称兼容任意 IQueryable。
+
+### 9.3 Dapper 依赖的现状、边界与退出条件
+
+**现状（实测）**：Dapper 的公开 API 在本代码库中只出现 8 处，全部集中在 `OpenIddictStoreSession` 一个类型内部（`ExecuteAsync`、`ExecuteScalarAsync<T>`、`QuerySingleOrDefaultAsync<T>`、`QueryAsync<T>`）。实体映射由 `OpenIddictStoreEntityMapper` 手写完成，谓词翻译由 `OpenIddictStorePredicateTranslator` 完成，SQL 由 `OpenIddictStoreQueryBuilder` 生成，逐行异步读取由 `StreamAsync` 手写 `ReadAsync` 循环完成。换言之，Dapper 目前承担的只是“执行命令并返回标量/行”这一薄层，其约定式映射能力恰好是本项目刻意绕开的部分。
+
+**边界约束**：以下三条是硬约束，由测试固化，违反即视为走查不通过。
+
+1. `Dapper` 命名空间只允许在查询执行层（`OpenIddictStoreSession`）出现，其他类型不得直接引用 Dapper 任何 API。
+2. 业务代码只依赖 ADO.NET 抽象（`DbConnection`、`DbCommand`、`DbDataReader`、`DbParameter`），不依赖具体驱动类型。
+3. 参数类型适配由方言负责，不得依赖 Dapper 的隐式 `DbType` 推断作为唯一依据。
+
+**为何暂不立即移除**：替换面虽小，但需要重建六个驱动各自的参数类型规则（`DateTime`/`DateTimeOffset`、`bool`、`byte[]`、LOB 与空串语义各不相同），而当前只有 SQLite 一种方言经过真库验证。在方言尚未定型时重写访问栈，等于用未验证的规则去验证未完成的方言，顺序错误。第 5.1 节的驱动矩阵还表明 SqlClient 与达梦在当前 net10 环境无法完成真实连接验收，进一步限制了验证手段。
+
+**退出条件（满足后再实施移除）**：DB-02～DB-07 全部完成且各参数规则有真库证据之后，将 `OpenIddictStoreSession` 内部改写为显式 `DbParameter` 赋值。因为调用面已收敛到一个类型，届时是一项机械替换而非架构调整；替换前后必须保持第 9.1 节两张真值表与全部 Store 合同测试通过。
+
 
 ## 10. 数据库 SQL 脚本、建库与版本升级
 
@@ -256,18 +350,18 @@ Dapper 不提供 LINQ provider；OpenIddict 的 CountAsync/GetAsync/ListAsync �
 
 各数据库 SQL 脚本是本项目持续维护的正式交付物。模型、索引或方言变化时，必须同时评估并维护受影响的脚本、升级路径、操作说明和测试，不能把首次建库完成视为脚本维护结束。
 
-8.x 的新安装脚本建立六张主表和所需辅助表。7.x → 8.x 提供单独升级脚本，保留既有 ID、令牌数据、JSON 和集合索引，增加 Resource/Session 结构及相关外键。Scope.Resources 的已有完整值保持不变，它们没有 Resource.Name 的长度 200 限制，也不强制对应独立 Resource 实体。升级脚本不从这些值自动创建 Resource 记录；应用如需导入，须提供符合独立实体 Name 合同的明确映射和元数据，不能截断、合并或猜测名称。
+首版安装脚本建立四张主表和四张辅助表。当前不提供 7→8 升级脚本：OpenIddict 8.x 尚无稳定版，本项目不实施 8.x。等 8.x 稳定版发布并实施后，再补 Resource/Session 结构与对应升级脚本；届时 Scope.Resources 的已有完整值必须保持不变，不从这些值自动创建 Resource 记录。
 
-升级前备份并停止并发旧版本写入；不承诺 7.x 与 8.x 对同一 schema 的混合滚动写入或自动降级。已有 EF/MongoDB 数据转换另行评估，不把本扩展的创建脚本描述成官方 EF 数据库的无缝替代。
+升级前备份并停止并发旧版本写入；不承诺混合滚动写入或自动降级。已有 EF/MongoDB 数据转换另行评估，不把本扩展的创建脚本描述成官方 EF 数据库的无缝替代。
 
 ### 10.1 唯一源码与随包交付
 
-每个 provider 的 `src/Sharp.OpenIddict.Dapper.<Provider>/Sql/` 是该数据库部署脚本的唯一源码位置，包含安装、同系列增量升级和适用的跨系列升级。运行时 CRUD、查询、锁及清理 SQL 仍由 Store/方言维护，不另复制成一套部署脚本；它们必须与所要求的架构版本一起验证。根目录 `scripts/`、测试、示例和部署文档引用这份源码，不维护第二套建表 SQL，也不使用 EF EnsureCreated 代替脚本。
+每个 provider 的 `src/Sharp.OpenIddict.Stores.<Provider>/Sql/` 是该数据库部署脚本的唯一源码位置，包含安装、同系列增量升级和适用的跨系列升级。运行时 CRUD、查询、锁及清理 SQL 仍由 Store/方言维护，不另复制成一套部署脚本；它们必须与所要求的架构版本一起验证。根目录 `scripts/`、测试、示例和部署文档引用这份源码，不维护第二套建表 SQL，也不使用 EF EnsureCreated 代替脚本。
 
 目录约定如下，`8/` 在兼容分支替换为 `7/`。示例中的 v0002 仅展示命名规则，不表示首版需要无实际变更的升级脚本。
 
 ```text
-src/Sharp.OpenIddict.Dapper.<Provider>/Sql/
+src/Sharp.OpenIddict.Stores.<Provider>/Sql/
   8/
     manifest.json
     README.md
@@ -276,7 +370,7 @@ src/Sharp.OpenIddict.Dapper.<Provider>/Sql/
     upgrade/v0001-to-v0002.sql
     variants/                         # 仅放确有差异的服务器/模式脚本
   cross-series/
-    7-v0001-to-8-v0001.sql             # 由目标 8.x 分支维护
+    7-v0001-to-8-v0001.sql             # 8.x 稳定版实施后再补
 ```
 
 `manifest.json` 逐条记录 provider、适用服务器/模式与最低版本、脚本类型、可用/仅历史保留状态、源/目标 Series 与 Version、相对 Sql 根目录的路径和 SHA-256。安装脚本的源版本为空；升级脚本必须有确定的源/目标版本。每个 SQL 的头部注释说明用途、适用目标、源/目标版本及事务/失败边界，与清单对应。MySql 清单分别列出 MySQL 和 MariaDB 的适用项；可引用同一物理文件，但必须分别执行验收。有差异时在 variants 中增加明确的专用文件；Dm 原生与声明支持的 Oracle 兼容模式遵循相同规则，不通过人工临时修改脚本适配。
@@ -290,7 +384,7 @@ NuGet 包版本、OpenIddict 版本和数据库架构版本各自管理。架构
 - 已发布的安装和升级 SQL 保持不可变，不覆盖、改名、删除旧文件或通过重算摘要掩盖修改；清单中既有脚本的路径、摘要和版本边界随历史保留。预览包发布的脚本同样适用。未发布的草稿允许修改。
 - 表、列、约束、索引、排序规则或需要持久化数据转换的变更，必须提升受影响 provider 的架构 Version，同时新增目标版本的完整安装脚本、明确起点的增量升级脚本与清单条目。仅修改运行时查询 SQL 且不改变存储结构/数据合同时，可保持架构 Version，但仍要重跑相关数据库合同。
 - 修复已发布脚本的问题也通过新版本交付。已知有缺陷的旧安装脚本在当前清单/说明中标记为“仅历史保留，不再用于新装”，仍为真实已部署的受支持旧架构提供升级/恢复路径。需要恢复部分执行状态时提供针对具体状态的操作说明，不能修改旧文件后让部署方把它当成原脚本重跑。
-- 同系列保留仍声明支持的历史安装与升级链；不支持跨过中间版本时写明执行顺序，不凭文件名自动猜测路线。7→8 脚本由目标系列维护，清单明确接受的 7.x 架构版本，7.x 包不携带未来 8.x 的安装脚本。
+- 同系列保留仍声明支持的历史安装与升级链；不支持跨过中间版本时写明执行顺序，不凭文件名自动猜测路线。跨系列脚本由目标系列维护，7.x 包不携带未来 8.x 的安装脚本。
 
 每次架构变更同时更新第 15 节数据字典、Store/方言所需版本、相关脚本及清单、升级说明、开发进度矩阵和测试。跨分支移植按目标系列重新编写/核对 SQL，不直接复制另一系列的版本记录。
 
@@ -317,14 +411,14 @@ MySQL/MariaDB 的字符集、索引与 DDL 差异，以及 Oracle/DM 的模式�
 
 ## 11. 测试与验收
 
-全部测试项目目标为 net10.0，建议 xUnit。共享同一组 Store 合同测试数据和断言，通过 provider fixture 分别执行，而不是复制六份断言。
+全部测试项目目标为 net10.0，建议 xUnit。共享同一组 Store 合同测试数据和断言，通过 provider fixture 分别执行，而不是复制六份断言。四个 Store 接口的逐成员基线固定在 `docs/contracts/7x-store-contracts.md`，并由单元测试对 7.7.2 反射结果做冻结比对；上游升级先让该用例失败，而不是让实现悄悄漂移。
 
 | 测试层 | 重点 |
 | --- | --- |
 | 单元测试 | DI 注册、最终选项校验及重新启用实体缓存的拒绝、JSON/本地化转换、参数化、LINQ 翻译与拒绝、第 9.1 节 NULL 真值表、取消和资源释放 |
 | Store 合同集成测试 | 每个成员、唯一性、空值、Unicode、长文本、集合精确匹配、UTC、更新/删除并发、事务回滚；集合包含超过 200 字符、大小写及尾随空格不同的值；普通字符串精确比较、同名不同大小写/尾空格主体的批量变更隔离、Oracle 空串谓词 |
-| 生命周期专项 | 不同状态与阈值的 Prune、逐方法 Revoke 筛选/计数/标记轮换、删除竞态、8.x Session/Resource；强制摘要碰撞时仍可同时保存并精确查询；全部 RequiredScopes 的 Ordinal 匹配 |
-| Manager/Server 测试 | 原生 Manager 接入、非泛型查询回调、Client Credentials、Code + PKCE、刷新、撤销和失效验证；同一作用域先读再批量撤销后重读、新作用域重读及旧快照 CAS 冲突；删除 Authorization 后仅绑定其 Session 的令牌失效 |
+| 生命周期专项 | 不同状态与阈值的 Prune、逐方法 Revoke 筛选/计数/标记轮换、删除竞态；强制摘要碰撞时仍可同时保存并精确查询；全部 RequiredScopes 的 Ordinal 匹配 |
+| Manager/Server 测试 | 原生 Manager 接入、非泛型查询回调、Client Credentials、Code + PKCE、刷新、撤销和失效验证；同一作用域先读再批量撤销后重读、新作用域重读及旧快照 CAS 冲突；删除 Authorization 后其令牌失效 |
 | 包与框架检查 | 每个类库 TFM 独立构建，nupkg 包含正确资产和依赖，最小消费者引用验证 |
 | 迁移与脚本维护测试 | 第 10.4 节清单/历史摘要/包文件检查、空库安装与完整升级链的结构一致性、数据保留、版本检查、7→8 升级和部分失败诊断 |
 
@@ -334,41 +428,43 @@ MySQL/MariaDB 的字符集、索引与 DDL 差异，以及 Oracle/DM 的模式�
 
 netstandard 不是可执行运行时；net10 测试成功也不等于已经在 net8/net9 运行。按用户要求，常规测试宿主保持 net10；7.x 的五目标构建和消费者检查作为编译兼容性证据，运行时支持声明另标注实际验证宿主。若以后要求 net8/net9 原生运行证明，再增加专用宿主验证，不能用包可还原代替。
 
-删除专项必须覆盖第 16.2.1 节的全部矩阵，特别是：Token.ApplicationId 为空或与 Authorization/Session 所属应用不同；Application 所属 Session 引用 ApplicationId 为空或属于其他应用的 Authorization；待删 Authorization 关联的其他应用 Session；Token 只绑定待删 Session、AuthorizationId 为空，或同时绑定另一 Authorization。验证选定集合完整删除，集合外的父实体保留；单独删除 Session 时保留 Token 的外键清空、标记轮换及旧快照更新抛出原生并发异常；根记录 CAS 冲突、关联写入竞争和中途失败时，删除、外键、辅助表及并发标记一起回滚。Prune 使用独立 fixture 验证不会复用普通删除而删除 Session 下的 Token。
+删除专项必须覆盖第 16.2.1 节的全部矩阵，特别是：Token.ApplicationId 为空，或与所属 Authorization 的应用不同；Token 同时绑定另一 Authorization。验证选定集合完整删除，集合外的父实体保留；根记录 CAS 冲突、关联写入竞争和中途失败时，删除、外键、辅助表及并发标记一起回滚。Prune 使用独立 fixture 验证不会复用普通删除的关联语义。
 
 撤销专项必须逐方法覆盖无匹配行、valid/revoked/NULL 混合状态、可选状态筛选、重复调用、实际影响行数、命中行标记轮换和未命中行标记不变；第 16.2.2 节的计数示例均为必需断言。不得将通用 RevokeAsync、Token RevokeBy* 和 Authorization RevokeBy* 绑定到相同的隐含状态过滤器。
 
-最低发布验收包括：目标版本全部 Store 成员可调用；声明支持的查询子集通过；真实数据库完成长 Token.Payload、LOB、唯一性、集合边界、事务并发和清理测试；通过原生 Manager 完成同一及跨作用域的撤销后重新查询、逐方法撤销计数与旧快照冲突验证；上述删除专项全部通过，包括仅绑定 Session 的令牌在所属授权普通删除后被拒绝；无全表内存 LINQ 回退；包不带 EF/ABP 依赖；SQL 和异常不泄露客户端密钥、令牌正文或连接凭据。
+最低发布验收包括：目标版本全部 Store 成员可调用；声明支持的查询子集通过；真实数据库完成长 Token.Payload、LOB、唯一性、集合边界、事务并发和清理测试；通过原生 Manager 完成同一及跨作用域的撤销后重新查询、逐方法撤销计数与旧快照冲突验证；上述删除专项全部通过；无全表内存 LINQ 回退；包不带 EF/ABP 依赖；SQL 和异常不泄露客户端密钥、令牌正文或连接凭据。
 
 ## 12. 示例与文档
 
 提供两个 net10 示例，避免为六种数据库复制六套服务器：
 
-- Sample.Server：ASP.NET Core + OpenIddict + 本扩展，默认 SQLite，可通过配置切换其他 provider；通过原生 Manager 初始化应用、Scope，8.x 另演示 Resource/Session。
+- Sample.Server：ASP.NET Core + OpenIddict + 本扩展，默认 SQLite，可通过配置切换其他 provider；通过原生 Manager 初始化应用、Scope。
 - Sample.Client：演示 Client Credentials，以及 Authorization Code + PKCE、刷新和撤销；交互登录使用明确标注的开发演示身份，不把此扩展包装成用户管理系统。
 
 示例的服务器证书/演示凭据仅用于开发，连接串通过环境变量或 user-secrets 提供。文档给出各数据库所需驱动、建库脚本、运行步骤、查询限制、实体缓存禁用要求和生产部署所需配置，说明撤销后须重新查询而非检查旧 POCO。提供 .http 请求便于快速验证；无需增加管理后台。
 
 ## 13. 实施顺序与交付
 
-1. 锁定 7.x/8.x 的实际发布依赖与完整接口清单。先对 Oracle/达梦做小范围真实驱动验证，确认绑定、大文本、UTC、分页和事务，尽早暴露六数据库共同设计的障碍。
-2. 完成 8.x 主线的工程布局、Models、DI、连接工厂及 SQLite 六类 Store，用合同测试建立基线。
+1. 锁定 7.7.2 的实际发布依赖与完整接口清单。先对 Oracle/达梦做小范围真实驱动验证，确认绑定、大文本、UTC、分页和事务，尽早暴露六数据库共同设计的障碍。
+2. 完成 7.x 系列的工程布局、Models、DI、连接工厂及 SQLite 四类 Store，用合同测试建立基线。
 3. 实现有限 LINQ 翻译和四张集合索引表，验证 Manager/Server 接入及事务并发。
 4. 接入其余五类 provider，MySQL/MariaDB 分别验收，完成各自 schema 脚本和驱动适配。
-5. 建立 7.x 兼容分支，按四类 Store 和旧接口对接，完成五目标构建及对应数据库合同测试。
-6. 完成两个 net10 示例、7→8 升级测试、README、兼容矩阵和 CI 打包验证，形成 7.x 正式候选与 8.x 预览候选。
+5. 完成五目标构建、包资产与低 TFM 资产加载验证。
+6. 完成两个 net10 示例、README、兼容矩阵和 CI 打包验证，形成正式候选。
+
+OpenIddict 8.x 主线等上游稳定版发布后再单独立项，本节不为其预留骨架。
 
 每一步都以具体行为与测试作为完成标准；不以工程数量、模拟 SQL 测试成功或 SQLite 成功代替六类数据库支持。发布 NuGet 属于后续单独操作，本轮只交付设计。
 
-首版不增加通用仓储、可插拔 ORM、多租户路由、任意主键映射、管理后台、分布式缓存或通用 LINQ/迁移引擎。最主要的风险是 8.x 预览接口变化、旧宿主的驱动兼容性，以及 Oracle/达梦的实际参数和事务行为。
+首版不增加通用仓储、可插拔 ORM、多租户路由、任意主键映射、管理后台、分布式缓存或通用 LINQ/迁移引擎。最主要的风险是旧宿主的驱动兼容性，以及 Oracle/达梦的实际参数和事务行为。
 
 ## 14. 公共 API 与组件合同
 
 ### 14.1 命名空间与实体
 
-产品命名空间使用 `Sharp.OpenIddict.Dapper`、`Sharp.OpenIddict.Dapper.Models` 和对应 provider 子命名空间。DI 扩展方法放在 `Microsoft.Extensions.DependencyInjection`，遵循 OpenIddict 现有接入方式。
+产品命名空间使用 `Sharp.OpenIddict.Stores`、`Sharp.OpenIddict.Stores.Models` 和对应 provider 子命名空间。DI 扩展方法放在 `Microsoft.Extensions.DependencyInjection`，遵循 OpenIddict 现有接入方式。
 
-默认实体命名为 `OpenIddictDapperApplication`、`OpenIddictDapperAuthorization`、`OpenIddictDapperScope`、`OpenIddictDapperToken`；8.x 另含 `OpenIddictDapperResource`、`OpenIddictDapperSession`。Store 相应命名为 `OpenIddictDapperApplicationStore<TApplication>` 等。
+默认实体命名为 `OpenIddictStoreApplication`、`OpenIddictStoreAuthorization`、`OpenIddictStoreScope`、`OpenIddictStoreToken`。Store 相应命名为 `OpenIddictStoreApplicationStore<TApplication>` 等。OpenIddict 8.x 的 Resource、Session 实体待其稳定版发布后再补充。
 
 实体是存储 POCO：日期属性为 `DateTime?`，只接受/返回 UTC 语义；外键为 `string?`；集合、字典与 JWK 集合的底层属性为 JSON `string?`。Store 负责在 JSON 与原生接口要求的 ImmutableArray、ImmutableDictionary、JsonWebKeySet 之间转换。不要照搬 EF 导航属性，也不要直接依赖其 Models 程序集。
 
@@ -380,10 +476,10 @@ netstandard 不是可执行运行时；net10 测试成功也不等于已经在 n
 
 | API | 合同 |
 | --- | --- |
-| `UseDapper()` / `UseDapper(Action<OpenIddictDapperBuilder>)` | 在 OpenIddictCoreBuilder 上注册本扩展，调用原生 DisableEntityCaching；幂等，不重复注册同一服务 |
+| `UseDapper()` / `UseDapper(Action<OpenIddictStoreBuilder>)` | 在 OpenIddictCoreBuilder 上注册本扩展，调用原生 DisableEntityCaching；幂等，不重复注册同一服务 |
 | `UseSqlServer()` 等六个 provider 方法 | 安装对应方言；同一注册选择多个不同 provider 时启动失败，不以最后一次调用静默覆盖 |
 | `UseConnectionFactory(Func<IServiceProvider, DbConnection>)` | 每次操作获取新连接，默认实现负责调用 OpenAsync 与释放 |
-| `UseConnectionFactory<TFactory>()` | 注册实现 IOpenIddictDapperConnectionFactory 的连接工厂 |
+| `UseConnectionFactory<TFactory>()` | 注册实现 IOpenIddictStoreConnectionFactory 的连接工厂 |
 | `SetSchema(string?)` | 设置独立 schema；SQLite/MySQL 不支持的 schema 语义须拒绝，不能静默忽略 |
 | `SetTablePrefix(string)` | 默认 OpenIddict；应用于主表、辅助表及架构版本表，长度和合法性由 provider 校验 |
 | `SetCommandTimeout(int?)` | 默认 null，遵循驱动/Dapper 的默认值；显式值必须为正秒数 |
@@ -397,6 +493,10 @@ Store 默认 Scoped；无状态方言可 Singleton；连接不注册为 Singleto
 ### 14.3 内部职责
 
 核心内部只共享连接执行、JSON 转换、固定实体列映射和单表查询表达式处理。方言接口覆盖标识符引用、参数占位符、参数赋值、普通字符串非空精确等值、分页、写入/删除锁、限量清理 SQL 和架构脚本。NULL 补偿与业务状态规则仍在核心/Store，不能分散为六份 provider 业务代码。
+
+首版方言接口的确定成员是：`Provider`、`ParameterPrefix`、`MaximumParameters`（分块与 IN 保护上限）、`QuoteIdentifier`、`BuildExactStringEquals`、`BuildExactStringNotEqualsIncludingNull`、`BuildPaging`、`FormatDate`、`ReadDate`。`FormatDate`/`ReadDate` 负责日期参数绑定与列读取：SQLite 无原生日期类型，绑定固定格式 UTC 文本（`yyyy-MM-dd HH:mm:ss.ffffff`）并按文本解析；有原生日期类型的 provider 直接绑定 `DateTime`。`BuildExactStringNotEqualsIncludingNull` 生成把 NULL 视为不相等的精确不等谓词（`column IS NULL OR column <> @p`），供批量撤销使用；直接用 `<>` 会因三值逻辑静默丢掉 NULL 行。Store 不直接依赖驱动对日期的默认转换，因此新增方言时必须实现这几个成员。provider 方法（`UseSqlServer()` 等）由各自的 provider 包提供，核心包只暴露 `UseProvider(OpenIddictStoreProvider)` 作为它们共同的落地入口，避免六个 provider 包互相引用。方言实例无状态，注册为 Singleton；Store 为 Scoped。
+
+标识符只有两个来源：固定的表/列名常量，以及经 `OpenIddictStoreIdentifiers` 校验的 schema/前缀。部署脚本源码用 `__PREFIX__` 占位符保存前缀位置，生成部署副本时才替换，仓库中的历史脚本字节不变。
 
 查询表达式解析先形成受支持的操作序列，再由方言产生 SQL 与参数。保持原查询算子顺序；例如 Take 之后的 Where，不能直接改写成先 Where 再 Take。需要嵌套子查询才能保持语义时应生成子查询；无法正确处理的组合按公开限制拒绝，不能返回近似结果。
 
@@ -415,11 +515,11 @@ Store 默认 Scoped；无状态方言可 Singleton；连接不注册为 Singleto
 | Applications | ApplicationType Text(50)、ClientId Text(100)、ClientSecret LargeText、ClientType Text(50)、ConsentType Text(50)、DisplayName LargeText、DisplayNames Json、JsonWebKeySet Json、Permissions Json、PostLogoutRedirectUris Json、Properties Json、RedirectUris Json、Requirements Json、Settings Json |
 | Authorizations | ApplicationId Identifier(100)、CreationDate UtcDateTime、Properties Json、Scopes Json、Status Text(50)、Subject Text(400)、Type Text(50) |
 | Scopes | Description LargeText、Descriptions Json、DisplayName LargeText、DisplayNames Json、Name Text(200)、Properties Json、Resources Json |
-| Tokens | ApplicationId Identifier(100)、AuthorizationId Identifier(100)、CreationDate UtcDateTime、ExpirationDate UtcDateTime、Payload LargeText、Properties Json、RedemptionDate UtcDateTime、ReferenceId Text(100)、Status Text(50)、Subject Text(400)、Type Text(150)；8.x 另有 SessionId Identifier(100) |
-| Resources，8.x | Description LargeText、Descriptions Json、DisplayName LargeText、DisplayNames Json、Name Text(200)、Properties Json |
-| Sessions，8.x | ApplicationId Identifier(100)、AuthorizationId Identifier(100)、CreationDate UtcDateTime、LoginId Text(100)、Properties Json、Status Text(50)、Subject Text(400) |
+| Tokens | ApplicationId Identifier(100)、AuthorizationId Identifier(100)、CreationDate UtcDateTime、ExpirationDate UtcDateTime、Payload LargeText、Properties Json、RedemptionDate UtcDateTime、ReferenceId Text(100)、Status Text(50)、Subject Text(400)、Type Text(150) |
 
-ApplicationId 外键指向 Applications；AuthorizationId 指向 Authorizations；Token.SessionId 指向 Sessions。所有外键默认使用限制删除，由 Store 明确执行关联处理，避免不同数据库对级联路径的支持差异。
+ApplicationId 外键指向 Applications；AuthorizationId 指向 Authorizations。所有外键默认使用限制删除，由 Store 明确执行关联处理，避免不同数据库对级联路径的支持差异。OpenIddict 8.x 的 Resources、Sessions 表及 Token.SessionId 列待其稳定版发布后再补入本节。
+
+列映射没有第二套元数据：实体属性名即列名（`Id`→`Id`），主表名见本节表格，类型由第 15.5 节按 provider 决定。实体上不使用特性或 Fluent 映射，Store 的 SQL 直接引用这些名称；因此新增属性必须同时改本节、Store SQL 与安装脚本，不能靠自动映射。`ConcurrencyToken` 无原生访问器，只由 Store 维护。
 
 ### 15.3 辅助索引表
 
@@ -434,7 +534,7 @@ ApplicationId 外键指向 Applications；AuthorizationId 指向 Authorizations�
 
 重复值按 StringComparer.Ordinal 去重后赋 Position，辅助表顺序不覆盖 JSON 内原始顺序。摘要统一由应用对未经标准化的完整字符串 UTF-8 字节计算 SHA-256，不依赖数据库编码、排序规则或哈希函数。索引只筛选候选所属实体，再按其权威 JSON 中的完整值作 Ordinal 复核，并保证同一实体只返回一次。不同完整值即使摘要相同也各占一行；不得按摘要去重或添加摘要唯一约束。
 
-Scope/Resource 集合值不限定为 200 字符，且 `api` 与 `api ` 是两个不同元素；这些值与主表 Scope.Name/Resource.Name 的有界列合同分开。不能依赖二进制排序规则解决 SQL Server 字符串等值比较的尾随空格折叠，也不能在插入失败后用查询复核补救。
+Scope/Resource 集合值不限定为 200 字符，且 `api` 与 `api ` 是两个不同元素；这些值与主表 Scope.Name 的有界列合同分开。不能依赖二进制排序规则解决 SQL Server 字符串等值比较的尾随空格折叠，也不能在插入失败后用查询复核补救。
 
 ### 15.4 必需索引
 
@@ -443,9 +543,7 @@ Scope/Resource 集合值不限定为 200 字符，且 `api` 与 `api ` 是两个
 | Applications | ClientId 非空值唯一 |
 | Authorizations | (ApplicationId, Status, Subject, Type)；按 Subject 查找索引；按 CreationDate 清理索引 |
 | Scopes | Name 非空值唯一 |
-| Tokens | ReferenceId 非空值唯一；(ApplicationId, Status, Subject, Type)；AuthorizationId；Subject；CreationDate/ExpirationDate；8.x SessionId |
-| Resources | Name 非空值唯一 |
-| Sessions | LoginId；ApplicationId；AuthorizationId；Subject；CreationDate |
+| Tokens | ReferenceId 非空值唯一；(ApplicationId, Status, Subject, Type)；AuthorizationId；Subject；CreationDate/ExpirationDate |
 
 索引总键长须在每种服务器字符集下检查。URI、集合完整值和 Payload 不直接进入长字符串索引键。DDL 中的索引、约束名称按 provider 长度上限生成，不能让自定义前缀导致截断重名。
 
@@ -491,53 +589,48 @@ Scope/Resource 集合值不限定为 200 字符，且 `api` 与 `api ` 是两个
 
 更新时：生成候选新并发标记 → 以 Id/旧标记条件更新主表 → 验证影响行数为 1 → 重建受影响的集合索引 → 提交 → 更新内存实体标记。0 行即并发异常；回滚后仍保留旧实体标记。
 
-删除时：在事务内按 Id/旧标记取得根记录写入权 → 按以下规则处理子记录与辅助表 → 删除根记录并确认 CAS 成功 → 提交。相关 Authorization/Session 也须取得方言所需的写入锁，保证间接关联的并发写入受保护；不得只锁 Application 就假设所有间接关系不再变化。并发创建子项要么发生在删除之前并被正确处理，要么因外键/锁竞争失败；不允许产生孤儿或返回假成功。
+删除时：在事务内按 Id/旧标记取得根记录写入权 → 按以下规则处理子记录与辅助表 → 删除根记录并确认 CAS 成功 → 提交。相关 Authorization 也须取得方言所需的写入锁，保证间接关联的并发写入受保护；不得只锁 Application 就假设所有间接关系不再变化。并发创建子项要么发生在删除之前并被正确处理，要么因外键/锁竞争失败；不允许产生孤儿或返回假成功。
 
 #### 16.2.1 普通删除与关联失效
 
-8.x 的关联失效以锁定的 8.0.0-preview.4 EF Core 非批量 DeleteAsync 路径为参照：Authorization 删除会删除其 Session 和会话 Token；Application 删除也处理所属 Session 引用的 Authorization。参考方法为 OpenIddictEntityFrameworkCoreAuthorizationStore.DeleteAsync 和 OpenIddictEntityFrameworkCoreApplicationStore.DeleteAsync。该预览版的批量与非批量路径处理范围不完全一致，本项目统一采用下表的合同，不提供切换删除语义的批量操作选项。
+首版按 7.x 的四类实体执行删除。OpenIddict 8.x 引入 Session 后，关联失效范围会扩大，届时应以锁定的 8.x 稳定版 EF Core 非批量 DeleteAsync 路径为参照重写本节；现在不按预览版行为实现，也不预留切换删除语义的批量操作选项。
 
 | 普通删除入口 | 必须删除 | 必须保留/清空 |
 | --- | --- | --- |
-| Application，7.x | Application、其 Authorization、直接或经这些 Authorization 关联的 Token、相应辅助行 | 集合外实体保留 |
-| Application，8.x | Application、下述 A/S/T 集合及相应辅助行 | 集合外实体保留，其他 Application 主记录保留 |
-| Authorization，7.x | Authorization、所有 AuthorizationId 指向它的 Token、AuthorizationScopes | 其他父实体保留 |
-| Authorization，8.x | Authorization、所有 AuthorizationId 指向它的 Session、所有直接关联 Token 及这些 Session 的全部 Token、AuthorizationScopes | 不因 Token 引用其他 Authorization 就删除该其他 Authorization；其他 Application 保留 |
-| Session，8.x，单独删除 | Session、SessionId 指向它且 AuthorizationId 为空的 Token | 保留 Session 的 Authorization；其余关联 Token 清空 SessionId 并轮换标记 |
-| Token，两系列 | 该 Token | Application、Authorization、Session 保留 |
-| Scope，两系列 | Scope 及其 ScopeResources 辅助行 | Resource 实体保留 |
-| Resource，8.x | 该 Resource | Scope 及其 Resources JSON/辅助行保留 |
+| Application | Application、其 Authorization、直接或经这些 Authorization 关联的 Token、相应辅助行 | 集合外实体保留 |
+| Authorization | Authorization、所有 AuthorizationId 指向它的 Token、AuthorizationScopes | 其他父实体保留 |
+| Token | 该 Token | Application、Authorization 保留 |
+| Scope | Scope 及其 ScopeResources 辅助行 | Scope.Resources 中的集合值保留 |
+| Session、Resource | 首版不适用（7.7.2 无对应 Store） | — |
 
 Application 删除使用以下集合，全部在同一连接、同一事务及上述锁保护下确定并处理：
 
 - A0：ApplicationId 等于待删 Application.Id 的所有 Authorization。
-- S0：ApplicationId 等于待删 Application.Id 的所有 Session；7.x 为空集。
-- A：A0 加上 S0 中非空 AuthorizationId 指向的所有 Authorization，包括 ApplicationId 为空或属于其他应用的授权。
-- S：S0 加上所有 AuthorizationId 属于 A 的 Session；7.x 为空集。
-- T：ApplicationId 等于待删 Application.Id，或 AuthorizationId 属于 A，或 SessionId 属于 S 的所有 Token。各条件取并集，不要求 Token 的其他外键与所属应用一致。
+- A：即 A0；7.7.2 无 Session，不存在经 Session 间接扩充的授权。
+- T：ApplicationId 等于待删 Application.Id，或 AuthorizationId 属于 A 的所有 Token。各条件取并集，不要求 Token 的 ApplicationId 与 Authorization 所属应用一致。
 
-将 A 对应的其他 Session 纳入 S，是本项目为统一授权删除失效语义和限制外键处理明确补足的规则；不宣称 EF 预览版所有路径已实现相同集合。集合按上面列出的关系计算，不沿 Token 外键反向扩展 A 或 S，也不删除其他 Application 主记录。
+集合按上面列出的关系计算，不沿 Token 外键反向扩展 A，也不删除其他 Application 主记录。
 
 执行顺序固定为：
 
-1. 确认根记录旧并发标记并取得 A/S 中记录所需的写入锁，确定受保护的关联集合。
-2. 删除 T，再删除 S；7.x 省略 Session 步骤。
+1. 确认根记录旧并发标记并取得 A 中记录所需的写入锁，确定受保护的关联集合。
+2. 删除 T。
 3. 删除 A 的 AuthorizationScopes 辅助行，再删除 A。
 4. 删除该 Application 的两张 URI 辅助表行，再按根记录旧并发标记条件删除 Application，确认影响 1 行后提交。
 
-因此，Token.ApplicationId 为空但 AuthorizationId 属于 A 的 Token、仅绑定 S 的 Token，以及 AuthorizationId 在 A 之外但 SessionId 属于 S 的 Token 均会删除。最后一种情况只删除该 Token，其引用的外部 Authorization 保留。Application 或 Authorization 的关联删除不采用单独删除 Session 时保留授权 Token 的规则。
+因此，Token.ApplicationId 为空但 AuthorizationId 属于 A 的 Token 也会删除，而 AuthorizationId 在 A 之外但 ApplicationId 属于待删 Application 的 Token 同样删除；该 Token 引用的外部 Authorization 保留。
 
-单独删除 Authorization 时：取得根记录写入权；8.x 确定并保护所有 AuthorizationId 指向它的 Session；删除 AuthorizationId 指向它或 SessionId 属于这些 Session 的 Token；删除这些 Session；删除 AuthorizationScopes；按根记录旧标记删除 Authorization 并提交。7.x 省略 Session 条件和步骤。即使 Token.AuthorizationId 为空、ApplicationId 为空，或 Token 另有一个不同的 Authorization，也不能漏掉会话关联的 Token。
+单独删除 Authorization 时：取得根记录写入权；删除 AuthorizationId 指向它的全部 Token，即使该 Token 的 ApplicationId 为空或属于其他应用；删除 AuthorizationScopes；按根记录旧标记删除 Authorization 并提交。所有入口都必须验证根记录删除影响行数为 1，失败则回滚。
 
-单独删除 Session 时：取得根记录写入权；删除关联且 AuthorizationId 为空的 Token；对其余关联 Token 清空 SessionId 并轮换标记；按根记录旧标记删除 Session 并提交。该入口不删除 Session 引用的 Authorization。所有入口都必须验证根记录删除影响行数为 1，失败则回滚。
+Token、Scope 的单体删除不需要关联集合：Token 删除只按 Id 与旧并发标记删除该行；Scope 删除先删其 ScopeResources 辅助行，再按旧并发标记删除 Scope 行，Scope.Resources 中保存的集合值随 Scope 行一起消失，不反向影响任何独立实体。
 
-协议验收场景固定为：S.AuthorizationId=A，T.SessionId=S、T.AuthorizationId=NULL，S/T 均为 valid；普通删除 A 后 S/T 必须不存在，携带该 SessionId 的原有令牌在启用对应存储校验的 Server 路径中必须被拒绝。禁用实体缓存仍不追溯中止已经完成校验的在途请求。
+协议验收场景固定为：A 与 T 均为 valid，T.AuthorizationId=A、T.ApplicationId=NULL；普通删除 A 后 T 必须不存在，携带该令牌的原有凭据在启用对应存储校验的 Server 路径中必须被拒绝。禁用实体缓存仍不追溯中止已经完成校验的在途请求。
 
 上述流程通过共享内部 SQL/事务辅助方法实现，不调用会另开连接或独立提交的公共 Store DeleteAsync。保留行的外键清空与并发标记设置必须是同一 UPDATE；一次批量语句可为受影响行设置同一新 GUID 标记，并发标记不要求跨行唯一。任何根记录版本冲突、约束错误或中途失败均回滚全部关联变更；成功后重新查询获取新状态，旧快照的更新必须返回 0 行并转换为原生 ConcurrencyException。
 
 #### 16.2.2 批量撤销的逐方法合同
 
-以下规则对 7.x/8.x 均适用，以对应标签的 EF Core Store 筛选谓词为依据。这里的 client 参数表示 Application 主键，不是 ClientId。可选参数为 null/空串时不应用相应条件；RevokeBy* 的指定键必须非 null/空串。表内等值/不等值均采用第 16.1.1 节的精确比较；下文 `Status <> @revoked` 表示其逻辑含义，实际方言还须补足精确比较和 NULL 处理，不能直接照抄依赖默认排序规则的 SQL。
+以下规则以 7.7.2 标签的 EF Core Store 筛选谓词为依据。这里的 client 参数表示 Application 主键，不是 ClientId。可选参数为 null/空串时不应用相应条件；RevokeBy* 的指定键必须非 null/空串。表内等值/不等值均采用第 16.1.1 节的精确比较；下文 `Status <> @revoked` 表示其逻辑含义，实际方言还须补足精确比较和 NULL 处理，不能直接照抄依赖默认排序规则的 SQL。
 
 | Store/方法 | 完整筛选条件 | 已 revoked 的匹配行 |
 | --- | --- | --- |
@@ -555,7 +648,7 @@ Application 删除使用以下集合，全部在同一连接、同一事务及�
 
 必需计数示例：同一 Subject 下有一个 valid 和一个 revoked Token，Token.RevokeBySubjectAsync 首次返回 1、再次返回 0；对同样初始数据调用不带 status 筛选的 Token.RevokeAsync，两次均返回 2。对同样初始状态的 Authorization 调用 RevokeBySubjectAsync，两次均返回 2。显式 status=valid 的通用撤销首次返回 1、再次返回 0。另加入 NULL 状态行验证它在无 status 筛选和 Token.RevokeBy* 中被命中，在显式 status=valid/revoked 中不被命中；其他指定键不匹配的 NULL 状态行始终不受影响。每个示例同时断言命中行/未命中行的并发标记变化。
 
-这些方法只更新目标 Store 的实体，不隐式级联撤销另一类实体；授权、令牌及会话的后续协议校验仍由原生 Manager/Server 负责。Session Store 不新增原生合同没有的批量撤销成员。
+这些方法只更新目标 Store 的实体，不隐式级联撤销另一类实体；授权与令牌的后续协议校验仍由原生 Manager/Server 负责。
 
 ### 16.3 清理条件
 
@@ -565,13 +658,12 @@ Application 删除使用以下集合，全部在同一连接、同一事务及�
 | --- | --- |
 | Token | 状态既非 inactive 也非 valid；或者确有关联 Authorization 且其状态非 valid；或者 ExpirationDate 严格早于 now |
 | Authorization | 状态非 valid 或 Type 为 ad-hoc，并且不存在关联 Token |
-| Session | 状态非 valid，并且不存在关联 Token |
 
 “状态非 valid”等不等比较必须包含应视为不相等的 NULL，不能直接依赖 SQL 三值逻辑的 `<>`/NOT IN。
 
-Authorization/Session 清理必须在事务与相应锁保护下重新验证完整条件，尤其是不存在关联 Token；最终 DELETE 仍携带完整清理谓词，并由限制删除的外键兜底。Prune 使用独立清理路径，不调用第 16.2.1 节会删除会话及其 Token 的普通 DeleteAsync，也不为了使父记录可删而删除并发出现的 Token。
+Authorization 清理必须在事务与相应锁保护下重新验证完整条件，尤其是不存在关联 Token；最终 DELETE 仍携带完整清理谓词，并由限制删除的外键兜底。Prune 使用独立清理路径，不调用第 16.2.1 节会连带删除 Token 的普通 DeleteAsync，也不为了使父记录可删而删除并发出现的 Token。
 
-Authorization 的“不存在关联 Token”指不存在 AuthorizationId 指向它的 Token。清理符合条件的 Authorization 时，保留其 Session，并在同一事务内清空这些 Session 的 AuthorizationId、轮换其并发标记，保留 Session 的状态及其 Token；这延续本项目清理路径的显式外键处理策略。Prune 是受谓词限制的清理，不承担普通 DeleteAsync 的主动关联失效合同；测试须覆盖只绑定 Session 的 Token 不被清理路径误删。对最终不再满足清理条件的候选，不能提交外键清空等中间变更。独立清理路径与普通删除路径的差异必须在使用文档中说明。
+Authorization 的“不存在关联 Token”指不存在 AuthorizationId 指向它的 Token。对最终不再满足清理条件的候选，不能提交中间变更。独立清理路径与普通删除路径的差异必须在使用文档中说明。
 
 每批独立提交，删除时必须复核完整条件；并发标记只能作为附加检查，因为新建关联 Token 不会改变父记录标记。条件已不满足则保留该项；并发外键冲突等失败回滚该批并向上传播，之前已提交的批次不伪装成整次回滚。无自动重试未知写入、无忽略异常继续报告成功。
 
@@ -597,9 +689,9 @@ provider 脚本目录、清单、不可变历史与版本递增遵守第 10 节�
 
 CI 分三个阶段：
 
-1. 构建每个目标 TFM，执行纯单元测试和 SQLite 合同测试，检查包内容、依赖、公开 API 与最小消费者，以及 SQL 清单、历史不可变性和包内文件一致性。
+1. 构建每个目标 TFM，执行纯单元测试和 SQLite 合同测试，检查包内容、依赖、公开 API 与最小消费者，以及 SQL 清单、历史不可变性和包内文件一致性；同时检查第 4.1 节的中央包管理约束（工程文件无 `Version` 属性、包依赖版本与中央清单一致、产品包不带驱动依赖）和第 4.1.1 节的逐 TFM 依赖组（7.x 低 TFM 组不得出现高代际 Microsoft.Extensions 依赖）。
 2. 在专用环境执行全部声明支持的服务器/驱动组合，以及 Manager/Server、安装/升级链及结构一致性、事务与并发测试。Oracle/DM 自托管任务也是发布必需结果。
-3. 只有前两阶段成功才产生可发布 nupkg/snupkg 候选；两个系列独立版本化，所有同系列子包使用相同版本并精确依赖同版核心/Models。
+3. 只有前两阶段成功才产生可发布 nupkg/snupkg 候选；所有子包使用相同版本并精确依赖同版核心/Models。
 
 普通 PR 可在缺少部分外部数据库时给出明确缺口，但不能获得“六数据库已验证”的发布结论。实际发布到 NuGet 由单独发布操作完成，凭据由 CI secrets 提供，不放入仓库。
 
@@ -610,11 +702,12 @@ CI 分三个阶段：
 | 需求 | 对应实现 | 必需证据 |
 | --- | --- | --- |
 | Sharp 包名前缀 | 第 4、14 节 | 包与程序集名称检查 |
-| OpenIddict 7/8 分版本 | 第 2、3、17 节 | 两系列真实接口编译、不同 schema 误用拒绝、7→8 升级测试 |
-| 五个目标框架 | 7.x 所有发布类库 | 五 TFM 构建、包资产与消费者检查；实际运行宿主另列 |
+| OpenIddict 7.7.2 基线 | 第 2、3、17 节 | 按 7.7.2 真实接口编译、不同 schema 误用拒绝 |
+| 五个目标框架 | 所有发布类库 | 五 TFM 构建、包资产与消费者检查；实际运行宿主另列 |
+| 依赖版本中央管理 | 第 4.1、4.1.1 节 | 工程文件无 `Version` 属性、包依赖与中央清单一致、产品包不带驱动依赖、逐 TFM 依赖组与代际匹配 |
 | 六类数据库 | 六 provider、公共 Store | 七种服务器（含单独 MariaDB）的合同测试；DM 声明模式测试 |
 | 数据库 SQL 持续维护 | 第 10/17/18 节、各 provider 的 Sql 目录 | 不可变历史、清单/包摘要、逐库安装/升级链、结构一致性、数据保留和恢复证据 |
-| 原生协议接入 | Manager/Server 及示例，实体缓存禁用 | 发令牌、PKCE、刷新、同一及跨作用域撤销后重读；授权普通删除后仅绑定 Session 的令牌被拒绝；重新启用缓存被拒绝 |
+| 原生协议接入 | Manager/Server 及示例，实体缓存禁用 | 发令牌、PKCE、刷新、同一及跨作用域撤销后重读；授权普通删除后其令牌被拒绝；重新启用缓存被拒绝 |
 | .NET 10 测试/示例 | tests、samples | net10 运行，全部工程由 slnx 管理 |
 | 无内存整表回退 | 固定 SQL、有限查询翻译器 | 不支持表达式拒绝、分页与大结果枚举测试 |
 | 集合原生语义 | JSON、摘要候选、完整值 Ordinal 复核 | 超过 200 字符、大小写/尾随空格区分、强制摘要碰撞、全部 RequiredScopes 匹配 |

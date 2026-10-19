@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0</TargetFrameworks>
+    <Description>Dapper store core for OpenIddict: stores, builder, options, connection lifetime, queries and serialization.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="OpenIddict.Core" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Sharp.OpenIddict.Stores.Models\Sharp.OpenIddict.Stores.Models.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The integration tests inspect the translated SQL directly to prove operator order and parameters. -->
+    <InternalsVisibleTo Include="Sharp.OpenIddict.Stores.IntegrationTests" />
+    <InternalsVisibleTo Include="Sharp.OpenIddict.Stores.Tests" />
+  </ItemGroup>
+
+</Project>

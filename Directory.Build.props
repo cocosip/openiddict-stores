@@ -1,0 +1,27 @@
+<Project>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+    <Deterministic>true</Deterministic>
+    <DebugType>embedded</DebugType>
+    <!-- Only src/ projects are packable; tests and samples must never enter a package. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Product>Sharp.OpenIddict.Stores</Product>
+    <Company>Sharp.OpenIddict.Stores</Company>
+    <Authors>Sharp.OpenIddict.Stores contributors</Authors>
+    <RepositoryType>git</RepositoryType>
+    <VersionPrefix>7.0.0</VersionPrefix>
+    <NeutralLanguage>en</NeutralLanguage>
+  </PropertyGroup>
+
+</Project>
