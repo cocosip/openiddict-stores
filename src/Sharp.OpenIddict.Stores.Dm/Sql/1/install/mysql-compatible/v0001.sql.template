@@ -1,86 +1,89 @@
--- Sharp.OpenIddict.Stores — Oracle 19c install script TEMPLATE
+-- Sharp.OpenIddict.Stores — Dameng DM8 (MySQL-compatible mode) install script TEMPLATE
+-- Target: Dameng DM8 with COMPATIBLE_MODE = 4 (MySQL-compatible), installed into a dedicated schema.
+--   DM8 supports several compatibility modes (0 native, 1 SQL92, 2 Oracle, 3 TDS, 4 MySQL, 5 DM6, 6 Teradata)
+--   and they differ in string comparison, empty-string handling, and paging syntax. Each declared mode is its
+--   own manifest entry, script, and acceptance run (design 5, 10.1); this file covers MySQL-compatible only.
+-- Mode behaviour this entry is written against: the empty string is distinct from NULL (MySQL semantics); the
+--   runtime pages with LIMIT [count] [OFFSET n]. Both are acceptance items on a real server in this mode,
+--   tracked in Sql/README.md. The instance must be initialized with CASE_SENSITIVE=1 (see Exact comparisons).
 -- This file is not executable as-is: the prefix and schema placeholders must be rendered first (see Sql/README.md).
--- Target: Oracle Database 19c or later; install into a dedicated schema.
--- Source version: none (install script); target: Series 7 / Version 1.
--- Transaction boundary: this script has NO surrounding transaction. Oracle commits DDL implicitly, so a
---   failure part-way leaves the objects already created in place. Diagnose with USER_OBJECTS and the version
+-- Source version: none (install script); target: Series 1 / Version 1.
+-- Transaction boundary: this script has NO surrounding transaction. DM8 commits DDL implicitly, so a failure
+--   part-way leaves the objects already created in place. Diagnose with the data dictionary and the version
 --   record, then finish or drop the partial objects manually before re-running (design 10.3, 17).
--- Client separators: there is no "/", no "GO", and no PL/SQL block. Each statement ends with a semicolon, so
---   SQL*Plus, SQLcl, a migration runner, and an ADO.NET command loop can all execute the rendered copy after
---   splitting on ";". Do not paste it into SQL*Plus expecting "/" terminators.
--- Identifiers: are always double-quoted. Oracle folds unquoted names to upper case, while the runtime quotes
---   every table and column name, so unquoted DDL would create OPENIDDICTAPPLICATIONS and the stores would
---   never find it. The schema placeholder becomes the quoted schema plus its dot, or nothing.
--- Exact comparisons: the runtime wraps both sides in NLSSORT(..., 'NLS_SORT=BINARY'), so the session's
---   NLS_COMP/NLS_SORT cannot make comparisons case- or accent-insensitive. No column-level collation is
---   needed, and none is possible before 12.2.
--- Empty strings: Oracle stores '' as NULL in VARCHAR2/NVARCHAR2. The stores skip optional filters on null or
---   empty input (design 16.1), so no predicate ever compares against an empty-string parameter. Empty string
---   values inside JSON are unaffected, because they live in the JSON text, not in VARCHAR2 columns.
+-- Client separators: no "/", no "GO", no PL/SQL block. Each statement ends with a semicolon, so DISQL, a
+--   migration manager, and an ADO.NET command loop can all execute the rendered copy after splitting on ";".
+-- Identifiers: always double-quoted. DM8 folds unquoted names to upper case, while the runtime quotes every
+--   table and column name, so unquoted DDL would create OPENIDDICTAPPLICATIONS. The schema placeholder becomes
+--   the quoted schema plus its dot, or nothing.
+-- Exact comparisons: the runtime emits a plain equality, which is exact on an instance initialized with the
+--   default CASE_SENSITIVE=1. An instance created with CASE_SENSITIVE=0 folds case in comparisons and breaks
+--   the exact-match contract (design 16.1.1); confirming the comparison behaviour on a real server in this
+--   mode is a release blocker tracked in Sql/README.md.
 -- Deletion: every foreign key is NO ACTION; the Store performs the associated deletes explicitly.
 
 CREATE TABLE __SCHEMA__"__PREFIX__Applications" (
-    "Id" nvarchar2(100) NOT NULL,
-    "ConcurrencyToken" nvarchar2(50) NOT NULL,
-    "ApplicationType" nvarchar2(50) NULL,
-    "ClientId" nvarchar2(100) NULL,
-    "ClientSecret" nclob NULL,
-    "ClientType" nvarchar2(50) NULL,
-    "ConsentType" nvarchar2(50) NULL,
-    "DisplayName" nclob NULL,
-    "DisplayNames" nclob NULL,
-    "JsonWebKeySet" nclob NULL,
-    "Permissions" nclob NULL,
-    "PostLogoutRedirectUris" nclob NULL,
-    "Properties" nclob NULL,
-    "RedirectUris" nclob NULL,
-    "Requirements" nclob NULL,
-    "Settings" nclob NULL,
+    "Id" nvarchar(100) NOT NULL,
+    "ConcurrencyToken" nvarchar(50) NOT NULL,
+    "ApplicationType" nvarchar(50) NULL,
+    "ClientId" nvarchar(100) NULL,
+    "ClientSecret" clob NULL,
+    "ClientType" nvarchar(50) NULL,
+    "ConsentType" nvarchar(50) NULL,
+    "DisplayName" clob NULL,
+    "DisplayNames" clob NULL,
+    "JsonWebKeySet" clob NULL,
+    "Permissions" clob NULL,
+    "PostLogoutRedirectUris" clob NULL,
+    "Properties" clob NULL,
+    "RedirectUris" clob NULL,
+    "Requirements" clob NULL,
+    "Settings" clob NULL,
     CONSTRAINT "PK___PREFIX__Applications" PRIMARY KEY ("Id")
 );
 
 CREATE TABLE __SCHEMA__"__PREFIX__Authorizations" (
-    "Id" nvarchar2(100) NOT NULL,
-    "ConcurrencyToken" nvarchar2(50) NOT NULL,
-    "ApplicationId" nvarchar2(100) NULL,
+    "Id" nvarchar(100) NOT NULL,
+    "ConcurrencyToken" nvarchar(50) NOT NULL,
+    "ApplicationId" nvarchar(100) NULL,
     "CreationDate" timestamp(6) NULL,
-    "Properties" nclob NULL,
-    "Scopes" nclob NULL,
-    "Status" nvarchar2(50) NULL,
-    "Subject" nvarchar2(400) NULL,
-    "Type" nvarchar2(50) NULL,
+    "Properties" clob NULL,
+    "Scopes" clob NULL,
+    "Status" nvarchar(50) NULL,
+    "Subject" nvarchar(400) NULL,
+    "Type" nvarchar(50) NULL,
     CONSTRAINT "PK___PREFIX__Authorizations" PRIMARY KEY ("Id"),
     CONSTRAINT "FK___PREFIX__Authorizations_App" FOREIGN KEY ("ApplicationId")
         REFERENCES __SCHEMA__"__PREFIX__Applications" ("Id")
 );
 
 CREATE TABLE __SCHEMA__"__PREFIX__Scopes" (
-    "Id" nvarchar2(100) NOT NULL,
-    "ConcurrencyToken" nvarchar2(50) NOT NULL,
-    "Description" nclob NULL,
-    "Descriptions" nclob NULL,
-    "DisplayName" nclob NULL,
-    "DisplayNames" nclob NULL,
-    "Name" nvarchar2(200) NULL,
-    "Properties" nclob NULL,
-    "Resources" nclob NULL,
+    "Id" nvarchar(100) NOT NULL,
+    "ConcurrencyToken" nvarchar(50) NOT NULL,
+    "Description" clob NULL,
+    "Descriptions" clob NULL,
+    "DisplayName" clob NULL,
+    "DisplayNames" clob NULL,
+    "Name" nvarchar(200) NULL,
+    "Properties" clob NULL,
+    "Resources" clob NULL,
     CONSTRAINT "PK___PREFIX__Scopes" PRIMARY KEY ("Id")
 );
 
 CREATE TABLE __SCHEMA__"__PREFIX__Tokens" (
-    "Id" nvarchar2(100) NOT NULL,
-    "ConcurrencyToken" nvarchar2(50) NOT NULL,
-    "ApplicationId" nvarchar2(100) NULL,
-    "AuthorizationId" nvarchar2(100) NULL,
+    "Id" nvarchar(100) NOT NULL,
+    "ConcurrencyToken" nvarchar(50) NOT NULL,
+    "ApplicationId" nvarchar(100) NULL,
+    "AuthorizationId" nvarchar(100) NULL,
     "CreationDate" timestamp(6) NULL,
     "ExpirationDate" timestamp(6) NULL,
-    "Payload" nclob NULL,
-    "Properties" nclob NULL,
+    "Payload" clob NULL,
+    "Properties" clob NULL,
     "RedemptionDate" timestamp(6) NULL,
-    "ReferenceId" nvarchar2(100) NULL,
-    "Status" nvarchar2(50) NULL,
-    "Subject" nvarchar2(400) NULL,
-    "Type" nvarchar2(150) NULL,
+    "ReferenceId" nvarchar(100) NULL,
+    "Status" nvarchar(50) NULL,
+    "Subject" nvarchar(400) NULL,
+    "Type" nvarchar(150) NULL,
     CONSTRAINT "PK___PREFIX__Tokens" PRIMARY KEY ("Id"),
     CONSTRAINT "FK___PREFIX__Tokens_App" FOREIGN KEY ("ApplicationId")
         REFERENCES __SCHEMA__"__PREFIX__Applications" ("Id"),
@@ -89,54 +92,54 @@ CREATE TABLE __SCHEMA__"__PREFIX__Tokens" (
 );
 
 CREATE TABLE __SCHEMA__"__PREFIX__ApplicationRedirectUris" (
-    "ApplicationId" nvarchar2(100) NOT NULL,
-    "UriHash" raw(32) NOT NULL,
-    "Uri" nclob NOT NULL,
-    "Position" number(10) NOT NULL,
+    "ApplicationId" nvarchar(100) NOT NULL,
+    "UriHash" varbinary(32) NOT NULL,
+    "Uri" clob NOT NULL,
+    "Position" int NOT NULL,
     CONSTRAINT "PK___PREFIX__AppRedirectUris" PRIMARY KEY ("ApplicationId", "Position"),
     CONSTRAINT "FK___PREFIX__AppRedirectUris_App" FOREIGN KEY ("ApplicationId")
         REFERENCES __SCHEMA__"__PREFIX__Applications" ("Id")
 );
 
 CREATE TABLE __SCHEMA__"__PREFIX__ApplicationPostLogoutRedirectUris" (
-    "ApplicationId" nvarchar2(100) NOT NULL,
-    "UriHash" raw(32) NOT NULL,
-    "Uri" nclob NOT NULL,
-    "Position" number(10) NOT NULL,
+    "ApplicationId" nvarchar(100) NOT NULL,
+    "UriHash" varbinary(32) NOT NULL,
+    "Uri" clob NOT NULL,
+    "Position" int NOT NULL,
     CONSTRAINT "PK___PREFIX__AppPostLogoutUris" PRIMARY KEY ("ApplicationId", "Position"),
     CONSTRAINT "FK___PREFIX__AppPostLogoutUris_App" FOREIGN KEY ("ApplicationId")
         REFERENCES __SCHEMA__"__PREFIX__Applications" ("Id")
 );
 
 CREATE TABLE __SCHEMA__"__PREFIX__AuthorizationScopes" (
-    "AuthorizationId" nvarchar2(100) NOT NULL,
-    "ScopeHash" raw(32) NOT NULL,
-    "Scope" nclob NOT NULL,
-    "Position" number(10) NOT NULL,
+    "AuthorizationId" nvarchar(100) NOT NULL,
+    "ScopeHash" varbinary(32) NOT NULL,
+    "Scope" clob NOT NULL,
+    "Position" int NOT NULL,
     CONSTRAINT "PK___PREFIX__AuthScopes" PRIMARY KEY ("AuthorizationId", "Position"),
     CONSTRAINT "FK___PREFIX__AuthScopes_Authz" FOREIGN KEY ("AuthorizationId")
         REFERENCES __SCHEMA__"__PREFIX__Authorizations" ("Id")
 );
 
 CREATE TABLE __SCHEMA__"__PREFIX__ScopeResources" (
-    "ScopeId" nvarchar2(100) NOT NULL,
-    "ResourceHash" raw(32) NOT NULL,
-    "Resource" nclob NOT NULL,
-    "Position" number(10) NOT NULL,
+    "ScopeId" nvarchar(100) NOT NULL,
+    "ResourceHash" varbinary(32) NOT NULL,
+    "Resource" clob NOT NULL,
+    "Position" int NOT NULL,
     CONSTRAINT "PK___PREFIX__ScopeResources" PRIMARY KEY ("ScopeId", "Position"),
     CONSTRAINT "FK___PREFIX__ScopeResources_Scope" FOREIGN KEY ("ScopeId")
         REFERENCES __SCHEMA__"__PREFIX__Scopes" ("Id")
 );
 
 CREATE TABLE __SCHEMA__"__PREFIX__SchemaVersions" (
-    "Series" nvarchar2(10) NOT NULL,
-    "Version" number(10) NOT NULL,
+    "Series" nvarchar(10) NOT NULL,
+    "Version" int NOT NULL,
     "UpdatedUtc" timestamp(6) NOT NULL,
     CONSTRAINT "PK___PREFIX__SchemaVersions" PRIMARY KEY ("Series")
 );
 
--- Unique keys: Oracle treats NULLs as distinct in a unique index, so many NULL ClientId/Name/ReferenceId
--- values are allowed without a function-based workaround (design 7, 15.4).
+-- Unique keys: DM8 treats NULLs as distinct in a unique index, so many NULL ClientId/Name/ReferenceId values
+-- are allowed without a workaround (design 7, 15.4).
 CREATE UNIQUE INDEX __SCHEMA__"UK___PREFIX__Applications_ClientId"
     ON __SCHEMA__"__PREFIX__Applications" ("ClientId");
 CREATE UNIQUE INDEX __SCHEMA__"UK___PREFIX__Scopes_Name"
@@ -171,4 +174,4 @@ CREATE INDEX __SCHEMA__"IX___PREFIX__ScopeResources_Hash"
     ON __SCHEMA__"__PREFIX__ScopeResources" ("ResourceHash", "ScopeId");
 
 INSERT INTO __SCHEMA__"__PREFIX__SchemaVersions" ("Series", "Version", "UpdatedUtc")
-VALUES ('7', 1, SYS_EXTRACT_UTC(SYSTIMESTAMP));
+VALUES ('1', 1, SYS_EXTRACT_UTC(SYSTIMESTAMP));

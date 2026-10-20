@@ -194,7 +194,7 @@ public sealed class MySqlDialectTests
 
     private static string InstallTemplate()
         => File.ReadAllText(Path.Combine(
-            RepositoryRoot, "src", "Sharp.OpenIddict.Stores.MySql", "Sql", "7", "install", "v0001.sql.template"));
+            RepositoryRoot, "src", "Sharp.OpenIddict.Stores.MySql", "Sql", "1", "install", "v0001.sql.template"));
 
     private static string RepositoryRoot { get; } = LocateRepositoryRoot();
 

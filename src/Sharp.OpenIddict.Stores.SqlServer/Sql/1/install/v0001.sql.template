@@ -1,7 +1,7 @@
 -- Sharp.OpenIddict.Stores — SQL Server 7 / v0001 install script TEMPLATE
 -- This file is not executable as-is: the prefix and schema placeholders must be rendered first (see Sql/README.md).
 -- Target: SQL Server 2016 (13.x) or later, default collation; install into an empty database.
--- Source version: none (install script); target: Series 7 / Version 1.
+-- Source version: none (install script); target: Series 1 / Version 1.
 -- Transaction boundary: the whole script runs in one explicit transaction; any failing statement rolls back to no structures.
 -- Identifiers: the prefix placeholder becomes the configured table prefix (default OpenIddict) and the schema
 --   placeholder becomes the quoted schema including the trailing dot, or nothing for the default schema.
@@ -164,6 +164,6 @@ CREATE INDEX [IX___PREFIX__ScopeResources_ResourceHash_ScopeId]
     ON __SCHEMA__[__PREFIX__ScopeResources] ([ResourceHash], [ScopeId]);
 
 INSERT INTO __SCHEMA__[__PREFIX__SchemaVersions] ([Series], [Version], [UpdatedUtc])
-VALUES (N'7', 1, SYSUTCDATETIME());
+VALUES (N'1', 1, SYSUTCDATETIME());
 
 COMMIT;

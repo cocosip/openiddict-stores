@@ -1,4 +1,4 @@
-# SQLite deployment script (Series 7 / v0001)
+# SQLite deployment script (Series 1 / v0001)
 
 The shipped file is `7/install/v0001.sql.template`. It is a **template, not a runnable script**: the table
 prefix is configurable, so the copy that reaches the database must be rendered first with the same prefix the
@@ -36,7 +36,7 @@ template.
 2. Stop all writing processes; SQLite does not support rolling upgrades with multiple writers.
 3. Render the deployment copy from `7/install/v0001.sql.template` (see above) with the configured prefix.
 4. Execute the rendered copy with a SQLite client in a single transaction; the script itself contains `BEGIN TRANSACTION` / `COMMIT`.
-5. Verify that `{prefix}SchemaVersions` contains exactly one row with `Series='7'` and `Version=1`.
+5. Verify that `{prefix}SchemaVersions` contains exactly one row with `Series='1'` and `Version=1`.
 
 ## Transactions and failure recovery
 

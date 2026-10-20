@@ -1,7 +1,7 @@
 -- Sharp.OpenIddict.Stores — PostgreSQL 7 / v0001 install script TEMPLATE
 -- This file is not executable as-is: the prefix and schema placeholders must be rendered first (see Sql/README.md).
 -- Target: PostgreSQL 14 or later; install into a new schema (public by default).
--- Source version: none (install script); target: Series 7 / Version 1.
+-- Source version: none (install script); target: Series 1 / Version 1.
 -- Transaction boundary: the whole script runs in one transaction (PostgreSQL DDL is transactional); any
 --   failing statement leaves no structures behind.
 -- Identifiers: the prefix placeholder becomes the configured table prefix (default OpenIddict) and the schema
@@ -164,6 +164,6 @@ CREATE INDEX "IX___PREFIX__ScopeResources_Hash"
     ON __SCHEMA__"__PREFIX__ScopeResources" ("ResourceHash", "ScopeId");
 
 INSERT INTO __SCHEMA__"__PREFIX__SchemaVersions" ("Series", "Version", "UpdatedUtc")
-VALUES ('7', 1, (now() AT TIME ZONE 'UTC')::timestamp(6));
+VALUES ('1', 1, (now() AT TIME ZONE 'UTC')::timestamp(6));
 
 COMMIT;

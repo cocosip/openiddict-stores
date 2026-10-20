@@ -1,6 +1,6 @@
 {
   "provider": "Oracle",
-  "series": "7",
+  "series": "1",
   "entries": [
     {
       "type": "install",
@@ -10,10 +10,10 @@
       "rendersTokens": ["__PREFIX__", "__SCHEMA__"],
       "sourceSeries": null,
       "sourceVersion": null,
-      "targetSeries": "7",
+      "targetSeries": "1",
       "targetVersion": 1,
-      "path": "7/install/v0001.sql.template",
-      "sha256": "D07E70F8C2651A9670497E036689914BA36C2652CC5E78A4B88C691F21FCC78E"
+      "path": "1/install/v0001.sql.template",
+      "sha256": "B138CFB237FC47B1D830B6FCF702A4A7CD73E6D61B095F7A52C884AA10D61734"
     }
   ]
 }

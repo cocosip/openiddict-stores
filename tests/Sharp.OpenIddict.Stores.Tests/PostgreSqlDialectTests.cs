@@ -142,7 +142,7 @@ public sealed class PostgreSqlDialectTests
     public void InstallTemplate_RendersWithinTheIdentifierLimit_ForEveryTablePrefixTheOptionsAllow()
     {
         var template = File.ReadAllText(Path.Combine(
-            RepositoryRoot, "src", "Sharp.OpenIddict.Stores.PostgreSql", "Sql", "7", "install", "v0001.sql.template"));
+            RepositoryRoot, "src", "Sharp.OpenIddict.Stores.PostgreSql", "Sql", "1", "install", "v0001.sql.template"));
 
         // The longest fixed table suffix is "ApplicationPostLogoutRedirectUris" (33 bytes), so a 30-character
         // prefix is the longest that keeps every table name within the 63-byte limit.
@@ -165,7 +165,7 @@ public sealed class PostgreSqlDialectTests
     public void InstallTemplate_RefusesAPrefixWhoseTableNamesWouldBeTruncated()
     {
         var template = File.ReadAllText(Path.Combine(
-            RepositoryRoot, "src", "Sharp.OpenIddict.Stores.PostgreSql", "Sql", "7", "install", "v0001.sql.template"));
+            RepositoryRoot, "src", "Sharp.OpenIddict.Stores.PostgreSql", "Sql", "1", "install", "v0001.sql.template"));
 
         var exception = Assert.Throws<ArgumentException>(() => OpenIddictStoreIdentifiers
             .RenderDeploymentScript(template, Dialect, new string('P', 40)));
@@ -177,7 +177,7 @@ public sealed class PostgreSqlDialectTests
     public void InstallTemplate_StatementsSplitCleanly_WithoutStrayCommentStatements()
     {
         var template = File.ReadAllText(Path.Combine(
-            RepositoryRoot, "src", "Sharp.OpenIddict.Stores.PostgreSql", "Sql", "7", "install", "v0001.sql.template"));
+            RepositoryRoot, "src", "Sharp.OpenIddict.Stores.PostgreSql", "Sql", "1", "install", "v0001.sql.template"));
         var rendered = OpenIddictStoreIdentifiers.RenderDeploymentScript(template, Dialect, "OpenIddict");
 
         var statements = OpenIddictStoreIdentifiers.SplitStatements(rendered);
@@ -199,7 +199,7 @@ public sealed class PostgreSqlDialectTests
     public void InstallTemplate_DeclaresNoSchemaWhenTheDefaultOneIsUsed()
     {
         var template = File.ReadAllText(Path.Combine(
-            RepositoryRoot, "src", "Sharp.OpenIddict.Stores.PostgreSql", "Sql", "7", "install", "v0001.sql.template"));
+            RepositoryRoot, "src", "Sharp.OpenIddict.Stores.PostgreSql", "Sql", "1", "install", "v0001.sql.template"));
 
         var unqualified = OpenIddictStoreIdentifiers.RenderDeploymentScript(template, Dialect, "OpenIddict");
         var qualified = OpenIddictStoreIdentifiers.RenderDeploymentScript(template, Dialect, "OpenIddict", "auth");
@@ -212,7 +212,7 @@ public sealed class PostgreSqlDialectTests
     public void InstallTemplate_UsesThePhysicalTypesFromTheDesign()
     {
         var template = File.ReadAllText(Path.Combine(
-            RepositoryRoot, "src", "Sharp.OpenIddict.Stores.PostgreSql", "Sql", "7", "install", "v0001.sql.template"));
+            RepositoryRoot, "src", "Sharp.OpenIddict.Stores.PostgreSql", "Sql", "1", "install", "v0001.sql.template"));
 
         // Design 15.5: varchar(n) for bounded text, text for large text, bytea for the 32-byte digests,
         // timestamp(6) without time zone for UTC values.

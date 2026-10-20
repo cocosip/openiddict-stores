@@ -20,7 +20,7 @@
     <Company>Sharp.OpenIddict.Stores</Company>
     <Authors>Sharp.OpenIddict.Stores contributors</Authors>
     <RepositoryType>git</RepositoryType>
-    <VersionPrefix>7.0.0</VersionPrefix>
+    <VersionPrefix>1.0.0</VersionPrefix>
     <NeutralLanguage>en</NeutralLanguage>
   </PropertyGroup>
 

@@ -1,4 +1,4 @@
-# Oracle deployment script (Series 7 / v0001)
+# Oracle deployment script (Series 1 / v0001)
 
 The shipped file is `7/install/v0001.sql.template`. It is a **template, not a runnable script**: the table
 prefix and the schema are configurable, so the copy that reaches the database must be rendered first with the
@@ -38,7 +38,7 @@ schema throws before a copy is produced. The schema must already exist and the c
    semicolon, so SQL*Plus/SQLcl with `SET SQLBLANKLINES ON`, a migration tool, or an ADO.NET loop that splits
    on `;` all work. Do not paste it into SQL*Plus expecting `/` separators; those are client conventions, not
    part of the script (design 10.3).
-6. Verify that `{prefix}SchemaVersions` contains exactly one row with `Series = '7'` and `Version = 1`.
+6. Verify that `{prefix}SchemaVersions` contains exactly one row with `Series = '1'` and `Version = 1`.
 
 ## Transactions and failure recovery
 

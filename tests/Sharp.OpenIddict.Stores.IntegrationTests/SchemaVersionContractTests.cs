@@ -100,7 +100,7 @@ public sealed class SchemaVersionContractTests : IAsyncLifetime
             () => store.CountAsync(default).AsTask());
 
         Assert.Contains("series '8'", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("requires series '7'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("requires series '1'", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

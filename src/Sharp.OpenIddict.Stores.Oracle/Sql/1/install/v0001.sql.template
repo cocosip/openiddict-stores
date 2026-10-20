@@ -1,0 +1,174 @@
+-- Sharp.OpenIddict.Stores — Oracle 19c install script TEMPLATE
+-- This file is not executable as-is: the prefix and schema placeholders must be rendered first (see Sql/README.md).
+-- Target: Oracle Database 19c or later; install into a dedicated schema.
+-- Source version: none (install script); target: Series 1 / Version 1.
+-- Transaction boundary: this script has NO surrounding transaction. Oracle commits DDL implicitly, so a
+--   failure part-way leaves the objects already created in place. Diagnose with USER_OBJECTS and the version
+--   record, then finish or drop the partial objects manually before re-running (design 10.3, 17).
+-- Client separators: there is no "/", no "GO", and no PL/SQL block. Each statement ends with a semicolon, so
+--   SQL*Plus, SQLcl, a migration runner, and an ADO.NET command loop can all execute the rendered copy after
+--   splitting on ";". Do not paste it into SQL*Plus expecting "/" terminators.
+-- Identifiers: are always double-quoted. Oracle folds unquoted names to upper case, while the runtime quotes
+--   every table and column name, so unquoted DDL would create OPENIDDICTAPPLICATIONS and the stores would
+--   never find it. The schema placeholder becomes the quoted schema plus its dot, or nothing.
+-- Exact comparisons: the runtime wraps both sides in NLSSORT(..., 'NLS_SORT=BINARY'), so the session's
+--   NLS_COMP/NLS_SORT cannot make comparisons case- or accent-insensitive. No column-level collation is
+--   needed, and none is possible before 12.2.
+-- Empty strings: Oracle stores '' as NULL in VARCHAR2/NVARCHAR2. The stores skip optional filters on null or
+--   empty input (design 16.1), so no predicate ever compares against an empty-string parameter. Empty string
+--   values inside JSON are unaffected, because they live in the JSON text, not in VARCHAR2 columns.
+-- Deletion: every foreign key is NO ACTION; the Store performs the associated deletes explicitly.
+
+CREATE TABLE __SCHEMA__"__PREFIX__Applications" (
+    "Id" nvarchar2(100) NOT NULL,
+    "ConcurrencyToken" nvarchar2(50) NOT NULL,
+    "ApplicationType" nvarchar2(50) NULL,
+    "ClientId" nvarchar2(100) NULL,
+    "ClientSecret" nclob NULL,
+    "ClientType" nvarchar2(50) NULL,
+    "ConsentType" nvarchar2(50) NULL,
+    "DisplayName" nclob NULL,
+    "DisplayNames" nclob NULL,
+    "JsonWebKeySet" nclob NULL,
+    "Permissions" nclob NULL,
+    "PostLogoutRedirectUris" nclob NULL,
+    "Properties" nclob NULL,
+    "RedirectUris" nclob NULL,
+    "Requirements" nclob NULL,
+    "Settings" nclob NULL,
+    CONSTRAINT "PK___PREFIX__Applications" PRIMARY KEY ("Id")
+);
+
+CREATE TABLE __SCHEMA__"__PREFIX__Authorizations" (
+    "Id" nvarchar2(100) NOT NULL,
+    "ConcurrencyToken" nvarchar2(50) NOT NULL,
+    "ApplicationId" nvarchar2(100) NULL,
+    "CreationDate" timestamp(6) NULL,
+    "Properties" nclob NULL,
+    "Scopes" nclob NULL,
+    "Status" nvarchar2(50) NULL,
+    "Subject" nvarchar2(400) NULL,
+    "Type" nvarchar2(50) NULL,
+    CONSTRAINT "PK___PREFIX__Authorizations" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK___PREFIX__Authorizations_App" FOREIGN KEY ("ApplicationId")
+        REFERENCES __SCHEMA__"__PREFIX__Applications" ("Id")
+);
+
+CREATE TABLE __SCHEMA__"__PREFIX__Scopes" (
+    "Id" nvarchar2(100) NOT NULL,
+    "ConcurrencyToken" nvarchar2(50) NOT NULL,
+    "Description" nclob NULL,
+    "Descriptions" nclob NULL,
+    "DisplayName" nclob NULL,
+    "DisplayNames" nclob NULL,
+    "Name" nvarchar2(200) NULL,
+    "Properties" nclob NULL,
+    "Resources" nclob NULL,
+    CONSTRAINT "PK___PREFIX__Scopes" PRIMARY KEY ("Id")
+);
+
+CREATE TABLE __SCHEMA__"__PREFIX__Tokens" (
+    "Id" nvarchar2(100) NOT NULL,
+    "ConcurrencyToken" nvarchar2(50) NOT NULL,
+    "ApplicationId" nvarchar2(100) NULL,
+    "AuthorizationId" nvarchar2(100) NULL,
+    "CreationDate" timestamp(6) NULL,
+    "ExpirationDate" timestamp(6) NULL,
+    "Payload" nclob NULL,
+    "Properties" nclob NULL,
+    "RedemptionDate" timestamp(6) NULL,
+    "ReferenceId" nvarchar2(100) NULL,
+    "Status" nvarchar2(50) NULL,
+    "Subject" nvarchar2(400) NULL,
+    "Type" nvarchar2(150) NULL,
+    CONSTRAINT "PK___PREFIX__Tokens" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK___PREFIX__Tokens_App" FOREIGN KEY ("ApplicationId")
+        REFERENCES __SCHEMA__"__PREFIX__Applications" ("Id"),
+    CONSTRAINT "FK___PREFIX__Tokens_Authz" FOREIGN KEY ("AuthorizationId")
+        REFERENCES __SCHEMA__"__PREFIX__Authorizations" ("Id")
+);
+
+CREATE TABLE __SCHEMA__"__PREFIX__ApplicationRedirectUris" (
+    "ApplicationId" nvarchar2(100) NOT NULL,
+    "UriHash" raw(32) NOT NULL,
+    "Uri" nclob NOT NULL,
+    "Position" number(10) NOT NULL,
+    CONSTRAINT "PK___PREFIX__AppRedirectUris" PRIMARY KEY ("ApplicationId", "Position"),
+    CONSTRAINT "FK___PREFIX__AppRedirectUris_App" FOREIGN KEY ("ApplicationId")
+        REFERENCES __SCHEMA__"__PREFIX__Applications" ("Id")
+);
+
+CREATE TABLE __SCHEMA__"__PREFIX__ApplicationPostLogoutRedirectUris" (
+    "ApplicationId" nvarchar2(100) NOT NULL,
+    "UriHash" raw(32) NOT NULL,
+    "Uri" nclob NOT NULL,
+    "Position" number(10) NOT NULL,
+    CONSTRAINT "PK___PREFIX__AppPostLogoutUris" PRIMARY KEY ("ApplicationId", "Position"),
+    CONSTRAINT "FK___PREFIX__AppPostLogoutUris_App" FOREIGN KEY ("ApplicationId")
+        REFERENCES __SCHEMA__"__PREFIX__Applications" ("Id")
+);
+
+CREATE TABLE __SCHEMA__"__PREFIX__AuthorizationScopes" (
+    "AuthorizationId" nvarchar2(100) NOT NULL,
+    "ScopeHash" raw(32) NOT NULL,
+    "Scope" nclob NOT NULL,
+    "Position" number(10) NOT NULL,
+    CONSTRAINT "PK___PREFIX__AuthScopes" PRIMARY KEY ("AuthorizationId", "Position"),
+    CONSTRAINT "FK___PREFIX__AuthScopes_Authz" FOREIGN KEY ("AuthorizationId")
+        REFERENCES __SCHEMA__"__PREFIX__Authorizations" ("Id")
+);
+
+CREATE TABLE __SCHEMA__"__PREFIX__ScopeResources" (
+    "ScopeId" nvarchar2(100) NOT NULL,
+    "ResourceHash" raw(32) NOT NULL,
+    "Resource" nclob NOT NULL,
+    "Position" number(10) NOT NULL,
+    CONSTRAINT "PK___PREFIX__ScopeResources" PRIMARY KEY ("ScopeId", "Position"),
+    CONSTRAINT "FK___PREFIX__ScopeResources_Scope" FOREIGN KEY ("ScopeId")
+        REFERENCES __SCHEMA__"__PREFIX__Scopes" ("Id")
+);
+
+CREATE TABLE __SCHEMA__"__PREFIX__SchemaVersions" (
+    "Series" nvarchar2(10) NOT NULL,
+    "Version" number(10) NOT NULL,
+    "UpdatedUtc" timestamp(6) NOT NULL,
+    CONSTRAINT "PK___PREFIX__SchemaVersions" PRIMARY KEY ("Series")
+);
+
+-- Unique keys: Oracle treats NULLs as distinct in a unique index, so many NULL ClientId/Name/ReferenceId
+-- values are allowed without a function-based workaround (design 7, 15.4).
+CREATE UNIQUE INDEX __SCHEMA__"UK___PREFIX__Applications_ClientId"
+    ON __SCHEMA__"__PREFIX__Applications" ("ClientId");
+CREATE UNIQUE INDEX __SCHEMA__"UK___PREFIX__Scopes_Name"
+    ON __SCHEMA__"__PREFIX__Scopes" ("Name");
+CREATE UNIQUE INDEX __SCHEMA__"UK___PREFIX__Tokens_ReferenceId"
+    ON __SCHEMA__"__PREFIX__Tokens" ("ReferenceId");
+
+-- Main table indexes (design 15.4).
+CREATE INDEX __SCHEMA__"IX___PREFIX__Authz_App_Status_Subj_Type"
+    ON __SCHEMA__"__PREFIX__Authorizations" ("ApplicationId", "Status", "Subject", "Type");
+CREATE INDEX __SCHEMA__"IX___PREFIX__Authorizations_Subject"
+    ON __SCHEMA__"__PREFIX__Authorizations" ("Subject");
+CREATE INDEX __SCHEMA__"IX___PREFIX__Authorizations_CreationDate"
+    ON __SCHEMA__"__PREFIX__Authorizations" ("CreationDate");
+
+CREATE INDEX __SCHEMA__"IX___PREFIX__Token_App_Status_Subj_Type"
+    ON __SCHEMA__"__PREFIX__Tokens" ("ApplicationId", "Status", "Subject", "Type");
+CREATE INDEX __SCHEMA__"IX___PREFIX__Tokens_AuthorizationId"
+    ON __SCHEMA__"__PREFIX__Tokens" ("AuthorizationId");
+CREATE INDEX __SCHEMA__"IX___PREFIX__Tokens_Subject" ON __SCHEMA__"__PREFIX__Tokens" ("Subject");
+CREATE INDEX __SCHEMA__"IX___PREFIX__Tokens_CreationDate" ON __SCHEMA__"__PREFIX__Tokens" ("CreationDate");
+CREATE INDEX __SCHEMA__"IX___PREFIX__Tokens_ExpirationDate" ON __SCHEMA__"__PREFIX__Tokens" ("ExpirationDate");
+
+-- Auxiliary table candidate indexes: hashes only narrow the candidates, the final check uses the full value with Ordinal comparison (design 15.3).
+CREATE INDEX __SCHEMA__"IX___PREFIX__AppRedirectUris_Hash"
+    ON __SCHEMA__"__PREFIX__ApplicationRedirectUris" ("UriHash", "ApplicationId");
+CREATE INDEX __SCHEMA__"IX___PREFIX__AppPostLogoutUris_Hash"
+    ON __SCHEMA__"__PREFIX__ApplicationPostLogoutRedirectUris" ("UriHash", "ApplicationId");
+CREATE INDEX __SCHEMA__"IX___PREFIX__AuthScopes_ScopeHash"
+    ON __SCHEMA__"__PREFIX__AuthorizationScopes" ("ScopeHash", "AuthorizationId");
+CREATE INDEX __SCHEMA__"IX___PREFIX__ScopeResources_Hash"
+    ON __SCHEMA__"__PREFIX__ScopeResources" ("ResourceHash", "ScopeId");
+
+INSERT INTO __SCHEMA__"__PREFIX__SchemaVersions" ("Series", "Version", "UpdatedUtc")
+VALUES ('1', 1, SYS_EXTRACT_UTC(SYSTIMESTAMP));

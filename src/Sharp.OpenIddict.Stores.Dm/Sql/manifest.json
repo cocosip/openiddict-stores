@@ -1,6 +1,6 @@
 {
   "provider": "Dm",
-  "series": "7",
+  "series": "1",
   "entries": [
     {
       "type": "install",
@@ -10,10 +10,36 @@
       "rendersTokens": ["__PREFIX__", "__SCHEMA__"],
       "sourceSeries": null,
       "sourceVersion": null,
-      "targetSeries": "7",
+      "targetSeries": "1",
       "targetVersion": 1,
-      "path": "7/install/v0001.sql.template",
-      "sha256": "327D2269CC8072A0A21CE2DEA29D9FBA952D92C862F46871E4F9C2F3C2D78708"
+      "path": "1/install/native/v0001.sql.template",
+      "sha256": "E5A628EB68973C68BF17FF2F1052B7E35BDA7EA21E58F77D7CAF76D6B646AF1C"
+    },
+    {
+      "type": "install",
+      "server": "DM8 (Oracle-compatible mode)",
+      "minimumVersion": "DM8",
+      "state": "available",
+      "rendersTokens": ["__PREFIX__", "__SCHEMA__"],
+      "sourceSeries": null,
+      "sourceVersion": null,
+      "targetSeries": "1",
+      "targetVersion": 1,
+      "path": "1/install/oracle-compatible/v0001.sql.template",
+      "sha256": "168461B36A4633B71392EF25C7B84782CFD6BD3DE8D5B022B8876817286B910F"
+    },
+    {
+      "type": "install",
+      "server": "DM8 (MySQL-compatible mode)",
+      "minimumVersion": "DM8",
+      "state": "available",
+      "rendersTokens": ["__PREFIX__", "__SCHEMA__"],
+      "sourceSeries": null,
+      "sourceVersion": null,
+      "targetSeries": "1",
+      "targetVersion": 1,
+      "path": "1/install/mysql-compatible/v0001.sql.template",
+      "sha256": "D8A0AC4738FFC90653A95B88E263842B7557D369C9428F649152F01238560176"
     }
   ]
 }

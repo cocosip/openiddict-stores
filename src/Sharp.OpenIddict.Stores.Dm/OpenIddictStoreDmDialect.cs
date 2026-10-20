@@ -1,26 +1,19 @@
 using System;
-using System.Data.Common;
 using System.Globalization;
-using Sharp.OpenIddict.Stores;
 
 namespace Sharp.OpenIddict.Stores.Dm;
 
 /// <summary>
-/// Dameng DM8 dialect, implemented independently of the Oracle one and scoped to a single, named
-/// compatibility mode.
+/// Dameng DM8 dialect for the <b>native</b> compatibility mode (<c>COMPATIBLE_MODE = 0</c>). Implemented
+/// independently of the Oracle one, like every DM dialect, and named for the single mode it was written for.
 /// </summary>
 /// <remarks>
 /// <para>
 /// DM8 runs under an instance-level compatibility mode (<c>COMPATIBLE_MODE</c>): the same server behaves
-/// differently for string comparison, empty strings, paging syntax, and DDL depending on that setting, and the
-/// Oracle-compatible mode is a different target from native mode. A dialect therefore cannot be "the DM
-/// dialect"; it has to name the mode it was written for. This one targets <b>native mode</b> only.
-/// </para>
-/// <para>
-/// The mode is not claimed by a manifest entry, a package description, or a README paragraph that mentions it
-/// in passing: <c>Sql/manifest.json</c> lists exactly one entry and names the mode in its <c>server</c> field,
-/// and a unit test pins that, so claiming Oracle compatibility requires a separate entry, a separate script, and
-/// a separate acceptance run (design 5, 10.1).
+/// differently for string comparison, empty strings, and paging depending on that setting. A dialect therefore
+/// cannot be "the DM dialect"; it has to name the mode it was written for. The Oracle- and MySQL-compatible
+/// modes are separate dialects with their own manifest entries and their own acceptance runs; this one targets
+/// native mode only.
 /// </para>
 /// <para>
 /// Behaviour that differs by mode is left unverified rather than guessed: exact string comparison and the
@@ -29,7 +22,7 @@ namespace Sharp.OpenIddict.Stores.Dm;
 /// corrupts lookups without any error.
 /// </para>
 /// </remarks>
-public sealed class OpenIddictStoreDmDialect : IOpenIddictStoreDialect
+public sealed class OpenIddictStoreDmDialect : OpenIddictStoreDmDialectBase
 {
     /// <summary>
     /// The compatibility mode this dialect is written for. It is part of the dialect's identity, not a
@@ -41,50 +34,6 @@ public sealed class OpenIddictStoreDmDialect : IOpenIddictStoreDialect
     public static OpenIddictStoreDmDialect Instance { get; } = new();
 
     /// <inheritdoc />
-    public OpenIddictStoreProvider Provider => OpenIddictStoreProvider.Dm;
-
-    /// <inheritdoc />
-    public string ParameterPrefix => ":";
-
-    /// <inheritdoc />
-    /// <remarks>DM8 keeps Oracle's practical bind limits; 900 matches the batch ceiling the stores already use.</remarks>
-    public int MaximumParameters => 900;
-
-    /// <inheritdoc />
-    /// <remarks>DM8 allows 128 bytes for identifiers in the versions this provider targets.</remarks>
-    public int MaximumIdentifierLength => 128;
-
-    /// <inheritdoc />
-    /// <remarks>
-    /// DM8 folds unquoted identifiers to upper case by default, while the runtime uses mixed-case table and
-    /// column names, so quoting is mandatory rather than cosmetic.
-    /// </remarks>
-    public string QuoteIdentifier(string identifier)
-        => "\"" + OpenIddictStoreIdentifiers.ValidateLength(
-            OpenIddictStoreIdentifiers.Validate(identifier, nameof(identifier)), MaximumIdentifierLength) + "\"";
-
-    /// <inheritdoc />
-    /// <remarks>
-    /// A plain equality is emitted because DM8's <c>VARCHAR</c> comparison depends on the instance's
-    /// character set and on the compatibility mode, and neither is verified for this release. This is a
-    /// declared release blocker, not a satisfied requirement (design 16.1.1).
-    /// </remarks>
-    public string BuildExactStringEquals(string column, string parameterName)
-        => $"({column} = :{parameterName})";
-
-    /// <inheritdoc />
-    /// <remarks>
-    /// A plain <c>&lt;&gt;</c> yields UNKNOWN for NULL and would silently drop those rows; the NULL branch keeps
-    /// them, which is independent of the compatibility mode (design 16.2.2).
-    /// </remarks>
-    public string BuildExactStringNotEqualsIncludingNull(string column, string parameterName)
-        => $"({column} IS NULL OR {column} <> :{parameterName})";
-
-    /// <inheritdoc />
-    public string BuildExactStringColumnEquals(string left, string right)
-        => $"({left} = {right})";
-
-    /// <inheritdoc />
     /// <remarks>
     /// <c>LIMIT</c>/<c>OFFSET</c> is used because DM8 documents it as one of its paging forms and it does not
     /// depend on a row-count pseudocolumn. Which forms a given instance accepts still depends on the
@@ -92,7 +41,7 @@ public sealed class OpenIddictStoreDmDialect : IOpenIddictStoreDialect
     /// request needs no sentinel; an offset without a count uses the largest signed 32-bit value, which is the
     /// documented "effectively unbounded" idiom rather than a magic constant of this project's own invention.
     /// </remarks>
-    public string BuildPaging(int? count, int? offset)
+    public override string BuildPaging(int? count, int? offset)
     {
         if (count is null && offset is null)
         {
@@ -105,27 +54,4 @@ public sealed class OpenIddictStoreDmDialect : IOpenIddictStoreDialect
             ? limit
             : limit + " OFFSET " + offset.Value.ToString(CultureInfo.InvariantCulture);
     }
-
-    /// <inheritdoc />
-    /// <remarks>
-    /// DM8 stores <c>TIMESTAMP</c> without a time zone and its driver may convert a <see cref="DateTimeKind.Utc"/>
-    /// value using the session time zone, so the annotation is dropped and the UTC wall-clock value is stored
-    /// as-is; the value is already normalized to microseconds.
-    /// </remarks>
-    public object? FormatDate(DateTime? value)
-    {
-        if (value is null)
-        {
-            return null;
-        }
-
-        return DateTime.SpecifyKind(OpenIddictStoreJson.NormalizeUtc(value)!.Value, DateTimeKind.Unspecified);
-    }
-
-    /// <inheritdoc />
-    /// <remarks><c>TIMESTAMP</c> reads back with <see cref="DateTimeKind.Unspecified"/>, so UTC must be restored explicitly.</remarks>
-    public DateTime? ReadDate(DbDataReader reader, int ordinal)
-        => reader.IsDBNull(ordinal)
-            ? null
-            : OpenIddictStoreJson.AsUtc(reader.GetDateTime(ordinal));
 }

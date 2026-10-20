@@ -25,7 +25,7 @@ public sealed class SqlAssetTests
 
         Assert.True(File.Exists(Path.Combine(root, "manifest.json")));
         Assert.True(File.Exists(Path.Combine(root, "README.md")));
-        Assert.True(File.Exists(Path.Combine(root, "7", "install", "v0001.sql.template")));
+        Assert.True(File.Exists(Path.Combine(root, "1", "install", "v0001.sql.template")));
     }
 
     /// <summary>

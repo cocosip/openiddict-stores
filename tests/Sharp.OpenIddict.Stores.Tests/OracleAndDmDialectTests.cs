@@ -89,17 +89,53 @@ public sealed class OracleAndDmDialectTests
     }
 
     [Fact]
-    public void Dm_DeclaresNativeMode_AsPartOfItsIdentity()
+    public void Dm_DeclaresTheModeAsPartOfEachDialectsIdentity()
     {
         Assert.Equal("native", OpenIddictStoreDmDialect.CompatibilityMode);
+        Assert.Equal("oracle-compatible", OpenIddictStoreDmOracleCompatibleDialect.CompatibilityMode);
+        Assert.Equal("mysql-compatible", OpenIddictStoreDmMySqlCompatibleDialect.CompatibilityMode);
+
+        // Each mode is its own dialect instance: none of them may alias another.
+        Assert.NotSame(Dm, OpenIddictStoreDmOracleCompatibleDialect.Instance);
+        Assert.NotSame(Dm, OpenIddictStoreDmMySqlCompatibleDialect.Instance);
+        Assert.NotSame(OpenIddictStoreDmOracleCompatibleDialect.Instance, OpenIddictStoreDmMySqlCompatibleDialect.Instance);
+    }
+
+    [Fact]
+    public void Dm_Paging_FollowsTheFormsItsModeDeclares()
+    {
+        // Native and MySQL-compatible share the LIMIT/OFFSET form; Oracle-compatible uses the Oracle-style
+        // clause. The shapes are pinned here because which form an instance accepts depends on the mode.
+        Assert.Equal("LIMIT 10", Dm.BuildPaging(10, null));
+        Assert.Equal("LIMIT 10 OFFSET 20", Dm.BuildPaging(10, 20));
+        Assert.Equal("LIMIT 2147483647 OFFSET 20", Dm.BuildPaging(null, 20));
+
+        var oracleCompatible = OpenIddictStoreDmOracleCompatibleDialect.Instance;
+        Assert.Equal("FETCH NEXT 10 ROWS ONLY", oracleCompatible.BuildPaging(10, null));
+        Assert.Equal("OFFSET 20 ROWS", oracleCompatible.BuildPaging(null, 20));
+        Assert.Equal("OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY", oracleCompatible.BuildPaging(10, 20));
+        Assert.Equal("FETCH NEXT 0 ROWS ONLY", oracleCompatible.BuildPaging(0, null));
+
+        var mySqlCompatible = OpenIddictStoreDmMySqlCompatibleDialect.Instance;
+        Assert.Equal("LIMIT 10", mySqlCompatible.BuildPaging(10, null));
+        Assert.Equal("LIMIT 10 OFFSET 20", mySqlCompatible.BuildPaging(10, 20));
+        Assert.Equal("LIMIT 2147483647 OFFSET 20", mySqlCompatible.BuildPaging(null, 20));
+    }
+
+    [Fact]
+    public void Dm_Paging_IsEmptyWithoutCountOrOffset_InEveryMode()
+    {
+        Assert.Equal(string.Empty, Dm.BuildPaging(null, null));
+        Assert.Equal(string.Empty, OpenIddictStoreDmOracleCompatibleDialect.Instance.BuildPaging(null, null));
+        Assert.Equal(string.Empty, OpenIddictStoreDmMySqlCompatibleDialect.Instance.BuildPaging(null, null));
     }
 
     /// <summary>
-    /// The manifest is where a compatibility claim becomes binding, so an Oracle-compatible DM8 entry cannot
-    /// appear by editing a README: it would have to be added here, with a script and an acceptance run.
+    /// The manifest is where a compatibility claim becomes binding: exactly the modes with a dialect may
+    /// appear, one entry each, and the modes DM8 documents but this provider does not declare must stay out.
     /// </summary>
     [Fact]
-    public void DmManifest_ClaimsNativeModeOnly()
+    public void DmManifest_ClaimsExactlyTheImplementedModes()
     {
         var path = Path.Combine(RepositoryRoot, "src", "Sharp.OpenIddict.Stores.Dm", "Sql", "manifest.json");
 
@@ -109,16 +145,42 @@ public sealed class OracleAndDmDialectTests
             .Select(entry => entry.GetProperty("server").GetString()!)
             .ToList();
 
-        Assert.Single(servers);
-        Assert.Contains("native", servers[0], StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(servers, server => server.Contains("Oracle", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(3, servers.Count);
+        Assert.Contains(servers, server => server.Contains("native", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(servers, server => server.Contains("Oracle", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(servers, server => server.Contains("MySQL", StringComparison.OrdinalIgnoreCase));
+
+        // Undeclared modes must not creep in through a README or manifest edit.
+        Assert.DoesNotContain(servers, server => server.Contains("SQL92", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(servers, server => server.Contains("TDS", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(servers, server => server.Contains("DM6", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(servers, server => server.Contains("Teradata", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// The three mode scripts share one physical body: DM8's type system is not gated by COMPATIBLE_MODE, so a
+    /// divergence between the files would be an unreviewed schema fork. Only the headers may differ.
+    /// </summary>
+    [Fact]
+    public void Dm_ModeScripts_DeclareIdenticalSchemas()
+    {
+        var bodies = DmModes
+            .Select(mode => DdlBody(InstallTemplate("Dm", mode)))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Single(bodies);
+
+        // The seed record the version guard requires is part of that shared body, not a per-mode afterthought.
+        Assert.Contains("INSERT INTO", bodies[0], StringComparison.Ordinal);
+        Assert.Contains("'1', 1", bodies[0], StringComparison.Ordinal);
     }
 
     [Fact]
     public void Oracle_And_Dm_InstallScriptsUseTheirOwnPhysicalTypes()
     {
         var oracle = InstallTemplate("Oracle");
-        var dm = InstallTemplate("Dm");
+        var dm = InstallTemplate("Dm", "native");
 
         // Design 15.5 gives each server its own mapping; sharing one script would be wrong for one of them.
         Assert.Contains("nvarchar2(100)", oracle, StringComparison.Ordinal);
@@ -139,9 +201,17 @@ public sealed class OracleAndDmDialectTests
     [Fact]
     public void OracleAndDm_TemplatesRenderWithinTheIdentifierLimit()
     {
-        foreach (var (provider, dialect) in new[] { ("Oracle", Oracle), ("Dm", Dm) })
+        var cases = new (string Template, IOpenIddictStoreDialect Dialect)[]
         {
-            var template = InstallTemplate(provider);
+            ("Oracle", Oracle),
+            ("Dm", Dm),
+            ("Dm", OpenIddictStoreDmOracleCompatibleDialect.Instance),
+            ("Dm", OpenIddictStoreDmMySqlCompatibleDialect.Instance),
+        };
+
+        foreach (var (provider, dialect) in cases)
+        {
+            var template = InstallTemplate(provider, provider == "Dm" ? ModeOf(dialect) : null);
             var rendered = OpenIddictStoreIdentifiers.RenderDeploymentScript(template, dialect, "OpenIddict", "OIDC");
 
             var overlength = Regex.Matches(rendered, "\"[A-Za-z0-9_]+\"")
@@ -167,6 +237,12 @@ public sealed class OracleAndDmDialectTests
         AssertRegistered(dialect => dialect.UseOracle(), typeof(OpenIddictStoreOracleDialect));
         AssertRegistered(dialect => dialect.UseDm(), typeof(OpenIddictStoreDmDialect));
 
+        // The mode selects the dialect: each registration must install its own instance, and the default
+        // parameterless UseDm() must remain native so existing deployments do not shift modes silently.
+        AssertRegistered(dialect => dialect.UseDm(OpenIddictStoreDmCompatibilityMode.Native), typeof(OpenIddictStoreDmDialect));
+        AssertRegistered(dialect => dialect.UseDm(OpenIddictStoreDmCompatibilityMode.OracleCompatible), typeof(OpenIddictStoreDmOracleCompatibleDialect));
+        AssertRegistered(dialect => dialect.UseDm(OpenIddictStoreDmCompatibilityMode.MySqlCompatible), typeof(OpenIddictStoreDmMySqlCompatibleDialect));
+
         static void AssertRegistered(Func<OpenIddictStoreBuilder, OpenIddictStoreBuilder> select, Type expected)
         {
             var services = new ServiceCollection();
@@ -180,9 +256,23 @@ public sealed class OracleAndDmDialectTests
         }
     }
 
-    private static string InstallTemplate(string provider)
+    private static readonly string[] DmModes = ["native", "oracle-compatible", "mysql-compatible"];
+
+    private static string ModeOf(IOpenIddictStoreDialect dialect) => dialect switch
+    {
+        OpenIddictStoreDmOracleCompatibleDialect => "oracle-compatible",
+        OpenIddictStoreDmMySqlCompatibleDialect => "mysql-compatible",
+        _ => "native",
+    };
+
+    /// <summary>Everything after the header block: tables, keys, indexes, and the seed record.</summary>
+    private static string DdlBody(string template)
+        => template.Substring(template.IndexOf("CREATE TABLE", StringComparison.Ordinal));
+
+    private static string InstallTemplate(string provider, string? mode = null)
         => File.ReadAllText(Path.Combine(
-            RepositoryRoot, "src", $"Sharp.OpenIddict.Stores.{provider}", "Sql", "7", "install", "v0001.sql.template"));
+            RepositoryRoot, "src", $"Sharp.OpenIddict.Stores.{provider}", "Sql", "1", "install",
+            mode is null ? "v0001.sql.template" : Path.Combine(mode, "v0001.sql.template")));
 
     private static string RepositoryRoot { get; } = LocateRepositoryRoot();
 

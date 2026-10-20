@@ -13,10 +13,14 @@ internal static class DeploymentScript
 {
     public const string DefaultPrefix = OpenIddictStoreOptions.DefaultTablePrefix;
 
-    /// <summary>Reads <c>Sql/7/install/v0001.sql.template</c> from the provider project.</summary>
-    public static string Template(string provider)
+    /// <summary>Reads <c>Sql/1/install/v0001.sql.template</c> from the provider project.</summary>
+    /// <remarks>
+    /// DM ships one script per compatibility mode in a subdirectory; the other providers keep the single file.
+    /// </remarks>
+    public static string Template(string provider, string? mode = null)
         => File.ReadAllText(Path.Combine(
-            RepositoryRoot, "src", $"Sharp.OpenIddict.Stores.{provider}", "Sql", "7", "install", "v0001.sql.template"));
+            RepositoryRoot, "src", $"Sharp.OpenIddict.Stores.{provider}", "Sql", "1", "install",
+            mode is null ? "v0001.sql.template" : Path.Combine(mode, "v0001.sql.template")));
 
     /// <summary>Renders the SQLite install script with the same quoting the runtime dialect uses.</summary>
     public static string Sqlite(string prefix = DefaultPrefix)

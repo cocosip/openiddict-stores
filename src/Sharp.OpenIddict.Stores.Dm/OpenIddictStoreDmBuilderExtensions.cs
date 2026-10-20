@@ -10,10 +10,14 @@ namespace Microsoft.Extensions.DependencyInjection;
 public static class OpenIddictStoreDmBuilderExtensions
 {
     /// <summary>
-    /// Selects Dameng DM8 in native mode and installs the corresponding dialect. The Oracle-compatibility mode
-    /// is a separate acceptance target and is not claimed by this registration (design 5).
+    /// Selects Dameng DM8 and installs the dialect for the given compatibility mode. The mode is part of the
+    /// declaration, not a runtime switch: it must match the <c>COMPATIBLE_MODE</c> of the instance the
+    /// connection points at, and it selects the manifest entry whose script the deployment renders (design 5,
+    /// 10.1). Native mode is the default.
     /// </summary>
-    public static OpenIddictStoreBuilder UseDm(this OpenIddictStoreBuilder builder)
+    public static OpenIddictStoreBuilder UseDm(
+        this OpenIddictStoreBuilder builder,
+        OpenIddictStoreDmCompatibilityMode mode = OpenIddictStoreDmCompatibilityMode.Native)
     {
         if (builder is null)
         {
@@ -21,7 +25,13 @@ public static class OpenIddictStoreDmBuilderExtensions
         }
 
         builder.UseProvider(OpenIddictStoreProvider.Dm);
-        builder.Services.AddSingleton<IOpenIddictStoreDialect>(OpenIddictStoreDmDialect.Instance);
+        builder.Services.AddSingleton<IOpenIddictStoreDialect>(mode switch
+        {
+            OpenIddictStoreDmCompatibilityMode.Native => OpenIddictStoreDmDialect.Instance,
+            OpenIddictStoreDmCompatibilityMode.OracleCompatible => OpenIddictStoreDmOracleCompatibleDialect.Instance,
+            OpenIddictStoreDmCompatibilityMode.MySqlCompatible => OpenIddictStoreDmMySqlCompatibleDialect.Instance,
+            _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown DM8 compatibility mode."),
+        });
 
         return builder;
     }

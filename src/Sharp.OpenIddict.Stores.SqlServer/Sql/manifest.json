@@ -1,6 +1,6 @@
 {
   "provider": "SqlServer",
-  "series": "7",
+  "series": "1",
   "entries": [
     {
       "type": "install",
@@ -10,10 +10,10 @@
       "rendersTokens": ["__PREFIX__", "__SCHEMA__"],
       "sourceSeries": null,
       "sourceVersion": null,
-      "targetSeries": "7",
+      "targetSeries": "1",
       "targetVersion": 1,
-      "path": "7/install/v0001.sql.template",
-      "sha256": "6348044A1D5D0B37A5811CA379BF1A6CCA751342390CD0B7C4F4FE109F4D4298"
+      "path": "1/install/v0001.sql.template",
+      "sha256": "F969FDB646AC844B71A20DC9B927C82642DE7D01AA64E0AD1A398708F3ECAECD"
     }
   ]
 }

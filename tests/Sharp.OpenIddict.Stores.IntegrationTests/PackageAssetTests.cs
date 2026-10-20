@@ -210,7 +210,7 @@ public sealed class PackageAssetTests
             .ToArray();
 
         Assert.Single(versions);
-        Assert.Equal("7.0.0", versions[0]);
+        Assert.Equal("1.0.0", versions[0]);
     }
 
     [Fact]
@@ -222,7 +222,7 @@ public sealed class PackageAssetTests
 
         var sqlite = ListEntries("Sharp.OpenIddict.Stores.Sqlite");
 
-        Assert.Contains("sql/7/install/v0001.sql.template", sqlite);
+        Assert.Contains("sql/1/install/v0001.sql.template", sqlite);
         Assert.Contains("sql/manifest.json", sqlite);
         Assert.Contains("sql/README.md", sqlite);
     }
@@ -366,7 +366,7 @@ public sealed class PackageAssetTests
     }
 
     private static string PackagePath(string product)
-        => Path.Combine(ArtifactsDirectory, product + ".7.0.0.nupkg");
+        => Path.Combine(ArtifactsDirectory, product + ".1.0.0.nupkg");
 
     // Declared before its consumers: static field initializers run in textual order.
     private static string RepositoryRoot { get; } = LocateRepositoryRoot();

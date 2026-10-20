@@ -42,7 +42,7 @@ internal sealed class OpenIddictStoreSchema
     /// series; a provider whose scripts are at a different version is a packaging defect, and
     /// <c>SqlAssetTests</c> pins the manifest to these constants.
     /// </summary>
-    public const string RequiredSeries = "7";
+    public const string RequiredSeries = "1";
 
     /// <summary>The schema version this package requires. It advances together with the shipped scripts.</summary>
     public const int RequiredVersion = 1;

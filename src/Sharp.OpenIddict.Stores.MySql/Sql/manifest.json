@@ -1,6 +1,6 @@
 {
   "provider": "MySql",
-  "series": "7",
+  "series": "1",
   "entries": [
     {
       "type": "install",
@@ -10,10 +10,10 @@
       "rendersTokens": ["__PREFIX__"],
       "sourceSeries": null,
       "sourceVersion": null,
-      "targetSeries": "7",
+      "targetSeries": "1",
       "targetVersion": 1,
-      "path": "7/install/v0001.sql.template",
-      "sha256": "576C8E122A2988C2FFDB2BA77928A9EDCF19389D200EAE27B6FB5839C6D23F9B"
+      "path": "1/install/v0001.sql.template",
+      "sha256": "567DF08DF4B6BEAAC447CF195E21F1E06AEBB4AA9B6CA8584292A409074C6294"
     },
     {
       "type": "install",
@@ -23,10 +23,10 @@
       "rendersTokens": ["__PREFIX__"],
       "sourceSeries": null,
       "sourceVersion": null,
-      "targetSeries": "7",
+      "targetSeries": "1",
       "targetVersion": 1,
-      "path": "7/install/v0001.sql.template",
-      "sha256": "576C8E122A2988C2FFDB2BA77928A9EDCF19389D200EAE27B6FB5839C6D23F9B"
+      "path": "1/install/v0001.sql.template",
+      "sha256": "567DF08DF4B6BEAAC447CF195E21F1E06AEBB4AA9B6CA8584292A409074C6294"
     }
   ]
 }

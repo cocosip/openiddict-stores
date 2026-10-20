@@ -1,6 +1,6 @@
 {
   "provider": "Sqlite",
-  "series": "7",
+  "series": "1",
   "entries": [
     {
       "type": "install",
@@ -10,10 +10,10 @@
       "rendersTokens": ["__PREFIX__"],
       "sourceSeries": null,
       "sourceVersion": null,
-      "targetSeries": "7",
+      "targetSeries": "1",
       "targetVersion": 1,
-      "path": "7/install/v0001.sql.template",
-      "sha256": "C548D699151F908758BE8B70250A2C9054A4260DFFF8CCBE2C4A27043F2A7E4F"
+      "path": "1/install/v0001.sql.template",
+      "sha256": "B21DBE778401ED36E7BF9BF9093358EED14906659C3B89F13B86C3C32EE6BFB7"
     }
   ]
 }

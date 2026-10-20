@@ -1,4 +1,4 @@
-# SQL Server deployment script (Series 7 / v0001)
+# SQL Server deployment script (Series 1 / v0001)
 
 The shipped file is `7/install/v0001.sql.template`. It is a **template, not a runnable script**: the table
 prefix and the schema are configurable, so the copy that reaches the database must be rendered first with the
@@ -33,7 +33,7 @@ schema throws before a copy is produced. The schema must already exist; the scri
 3. Create the dedicated schema if one is configured (the script does not create it).
 4. Render the deployment copy from `7/install/v0001.sql.template` (see above) with the configured prefix and schema.
 5. Execute the rendered copy. The script is a single batch with no `GO` separator, so `sqlcmd -i`, SSMS, or an ADO.NET command loop can all run it unchanged.
-6. Verify that `{prefix}SchemaVersions` contains exactly one row with `Series = N'7'` and `Version = 1`.
+6. Verify that `{prefix}SchemaVersions` contains exactly one row with `Series = N'1'` and `Version = 1`.
 
 ## Transactions and failure recovery
 

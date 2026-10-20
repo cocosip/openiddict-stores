@@ -1,6 +1,6 @@
 {
   "provider": "PostgreSql",
-  "series": "7",
+  "series": "1",
   "entries": [
     {
       "type": "install",
@@ -10,10 +10,10 @@
       "rendersTokens": ["__PREFIX__", "__SCHEMA__"],
       "sourceSeries": null,
       "sourceVersion": null,
-      "targetSeries": "7",
+      "targetSeries": "1",
       "targetVersion": 1,
-      "path": "7/install/v0001.sql.template",
-      "sha256": "A62305F4631D40CAE74C07044FCCD73D03DA37998114C23D3D6A51ACE90DBC29"
+      "path": "1/install/v0001.sql.template",
+      "sha256": "07C8D032299360C21E442E4A1B11319126E415C1A96273980D4F546DD0603F41"
     }
   ]
 }

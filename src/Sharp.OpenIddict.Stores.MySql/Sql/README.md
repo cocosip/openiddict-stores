@@ -1,4 +1,4 @@
-# MySQL / MariaDB deployment script (Series 7 / v0001)
+# MySQL / MariaDB deployment script (Series 1 / v0001)
 
 The shipped file is `7/install/v0001.sql.template`. It is a **template, not a runnable script**: the table
 prefix is configurable, so the copy that reaches the database must be rendered first with the same value the
@@ -38,7 +38,7 @@ semantics, and `SetSchema` is rejected by the options validator rather than sile
 4. Execute the rendered copy. It contains no `DELIMITER` block and no stored programs, so it can run through
    the `mysql` client with `--show-warnings --batch`, a migration runner, or an ADO.NET command loop that
    splits on `;`. Stop on the first error; do not continue past it.
-5. Verify that `{prefix}SchemaVersions` contains exactly one row with `Series = '7'` and `Version = 1`.
+5. Verify that `{prefix}SchemaVersions` contains exactly one row with `Series = '1'` and `Version = 1`.
 
 ## Transactions, failure recovery, and why this differs from the other providers
 

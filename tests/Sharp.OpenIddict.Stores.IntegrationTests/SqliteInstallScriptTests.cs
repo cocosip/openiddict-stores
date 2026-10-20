@@ -75,7 +75,7 @@ public sealed class SqliteInstallScriptTests : IAsyncLifetime
         await using var reader = await command.ExecuteReaderAsync();
 
         Assert.True(await reader.ReadAsync());
-        Assert.Equal("7", reader.GetString(0));
+        Assert.Equal("1", reader.GetString(0));
         Assert.Equal(1, reader.GetInt32(1));
         Assert.False(await reader.ReadAsync());
     }

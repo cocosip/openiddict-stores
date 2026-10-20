@@ -428,7 +428,8 @@ public sealed class SchemaConsistencyTests
 
     private static string TemplateOf(string provider)
         => File.ReadAllText(Path.Combine(RepositoryRoot, "src", $"Sharp.OpenIddict.Stores.{provider}",
-            "Sql", "7", "install", "v0001.sql.template"));
+            "Sql", "1", "install",
+            provider == "Dm" ? Path.Combine("native", "v0001.sql.template") : "v0001.sql.template"));
 
     private static string RepositoryRoot { get; } = LocateRepositoryRoot();
 
