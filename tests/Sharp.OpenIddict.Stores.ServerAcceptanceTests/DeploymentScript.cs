@@ -1,0 +1,62 @@
+using System;
+using System.IO;
+using Sharp.OpenIddict.Stores;
+using Sharp.OpenIddict.Stores.Dm;
+using Sharp.OpenIddict.Stores.Oracle;
+using Sharp.OpenIddict.Stores.PostgreSql;
+
+namespace Sharp.OpenIddict.Stores.ServerAcceptance;
+
+/// <summary>
+/// Loads a shipped install-script template and renders the deployment copy the acceptance run executes:
+/// <c>__PREFIX__</c> becomes the run-unique table prefix and <c>__SCHEMA__</c> the quoted schema plus its
+/// trailing dot (nothing for the provider default). Rendering uses the runtime dialects, so a copy always
+/// matches the identifiers the stores look up (design 10.1).
+/// </summary>
+internal static class DeploymentScript
+{
+    public static string PostgreSql(string prefix, string? schema = null)
+        => OpenIddictStoreIdentifiers.RenderDeploymentScript(
+            Template("PostgreSql"), OpenIddictStorePostgreSqlDialect.Instance, prefix, schema);
+
+    public static string Oracle(string prefix, string? schema = null)
+        => OpenIddictStoreIdentifiers.RenderDeploymentScript(
+            Template("Oracle"), OpenIddictStoreOracleDialect.Instance, prefix, schema);
+
+    /// <summary>
+    /// Renders the DM8 install script for one compatibility mode. The mode names the template subdirectory
+    /// and selects the dialect whose quoting and identifier limit the rendering obeys; the values are the
+    /// modes' own <c>CompatibilityMode</c> constants, so an unknown mode fails here instead of rendering the
+    /// wrong script.
+    /// </summary>
+    public static string Dm(string mode, string prefix, string? schema = null)
+        => OpenIddictStoreIdentifiers.RenderDeploymentScript(
+            Template("Dm", mode), mode switch
+            {
+                OpenIddictStoreDmDialect.CompatibilityMode => OpenIddictStoreDmDialect.Instance,
+                OpenIddictStoreDmOracleCompatibleDialect.CompatibilityMode => OpenIddictStoreDmOracleCompatibleDialect.Instance,
+                OpenIddictStoreDmMySqlCompatibleDialect.CompatibilityMode => OpenIddictStoreDmMySqlCompatibleDialect.Instance,
+                _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown DM8 compatibility mode."),
+            },
+            prefix, schema);
+
+    private static string Template(string provider, string? mode = null)
+        => File.ReadAllText(Path.Combine(
+            RepositoryRoot, "src", $"Sharp.OpenIddict.Stores.{provider}", "Sql", "1", "install",
+            mode is null ? "v0001.sql.template" : Path.Combine(mode, "v0001.sql.template")));
+
+    private static string RepositoryRoot { get; } = LocateRepositoryRoot();
+
+    private static string LocateRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Sharp.OpenIddict.Stores.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
+        return directory?.FullName
+            ?? throw new InvalidOperationException("Could not locate the repository root (Sharp.OpenIddict.Stores.slnx).");
+    }
+}
