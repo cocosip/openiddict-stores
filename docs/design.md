@@ -1,6 +1,6 @@
 # Sharp.OpenIddict.Stores 项目设计文档
 
-文档版本：1.9。创建日期：2026-10-19。修订日期：2026-10-19。状态：设计评审稿。
+文档版本：1.10。创建日期：2026-10-19。修订日期：2026-10-20。状态：设计评审稿。
 
 本文是项目的正式设计文档和后续开发依据，覆盖产品范围、兼容版本、公共 API、持久化结构、数据库差异、运行语义、测试、示例与交付标准。它不是临时计划或执行记录。评审通过后以本文作为实现基线；实现若需要改变公开合同、数据库结构或支持范围，先修订本文，再修改代码与测试。
 
@@ -24,7 +24,7 @@
 - Dapper 已从依赖中完全移除（DB-02 期间实施，见第 9.3 节）。全部代码只依赖 ADO.NET 抽象 `DbConnection`、`DbCommand`、`DbParameter`、`DbDataReader`，生成的安装包依赖组中不再出现 Dapper。
 
 
-首版（7.x 兼容系列）负责 Application、Authorization、Scope、Token 四类实体的持久化。OpenIddict 8.x 的 Resource、Session 尚无稳定版依赖，暂不纳入实施范围；用户、密码、角色、用户登录界面和 ASP.NET Core Identity 存储不属于此扩展。
+首版（包版本 1.x）负责 Application、Authorization、Scope、Token 四类实体的持久化。OpenIddict 8.x 的 Resource、Session 尚无稳定版依赖，暂不纳入实施范围；用户、密码、角色、用户登录界面和 ASP.NET Core Identity 存储不属于此扩展。
 
 ## 2. 源码调研与版本边界
 
@@ -59,10 +59,10 @@
 
 | 项目系列 | 建议分支 | NuGet 版本示意 | OpenIddict 依赖 | 发布类库目标 |
 | --- | --- | --- | --- | --- |
-| 兼容系列（当前实施） | `release/7.x` | `7.0.0` | 锁定 7.7.2 稳定版；发布依赖范围 `[7.7.2,8.0.0-0)`，排除 8.x 及其预览版 | `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0` |
-| 主线系列（暂不实施） | `main` | 待定 | 需等 8.x 稳定版发布后再定；不锁定预览包 | `net10.0` |
+| 当前系列（实施中） | `master`（如需发布分支用 `release/1.x`） | `1.0.0` | 锁定 7.7.2 稳定版；发布依赖范围 `[7.7.2,8.0.0-0)`，排除 8.x 及其预览版 | `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0` |
+| 后续系列（暂不实施） | 待定 | 待定 | 需等 8.x 稳定版发布后再定；不锁定预览包 | 待定 |
 
-包的主版本表达 OpenIddict 兼容系列，次版本不必与上游保持一致。例如扩展 7.0.0 依赖 OpenIddict 7.7.2。7.x 发布范围采用 `[7.7.2,8.0.0-0)`，不能用会允许 8.0 预览版进入的宽范围。
+包版本由本项目自主编号，**不跟随上游 OpenIddict 的版本号**（2026-10-20 按用户决定，从此前"主版本表达 OpenIddict 兼容系列"的方案改为自主编号，见 development.md E-043）：首版 `1.0.0` 只表示本扩展自身的演进，与 OpenIddict 是 7 还是 8 无关。对上游的兼容范围由 NuGet 依赖范围表达——当前锁定 7.7.2，发布范围采用 `[7.7.2,8.0.0-0)`，不能用会允许 8.0 预览版进入的宽范围。数据库架构 Series 同样从本扩展自己的 `1` 开始（脚本目录 `Sql/1/`、`{prefix}SchemaVersions` 的种子记录 `Series='1'`），不沿用上游主版本。
 
 8.x 主线暂不实施：上游尚无稳定版，本项目不引用预览包，因此不为其创建工程骨架、不锁定预览依赖，也不发布预览包。等 8.x 稳定版发布并核实存储合同后再单独启动。
 
@@ -113,7 +113,7 @@ scripts/
 docs/
 ```
 
-使用 .NET 10 SDK、Nullable、集中包版本管理。7.x 按 TFM 管理 Microsoft.Extensions 等依赖，避免给 net8.0 消费者强行引入另一主版本的依赖体系。
+使用 .NET 10 SDK、Nullable、集中包版本管理。扩展包按 TFM 管理 Microsoft.Extensions 等依赖，避免给 net8.0 消费者强行引入另一主版本的依赖体系。
 
 ### 4.1 依赖版本与中央包管理
 
@@ -122,13 +122,13 @@ docs/
 - 仓库根目录 `Directory.Packages.props` 启用 `ManagePackageVersionsCentrally`，用 `PackageVersion` 集中登记所有直接依赖和需要提升的传递依赖版本。任何 `.csproj` 不得再写带 `Version` 的 `PackageReference`；出现即视为违反本节，须由构建与 CI 检查拒绝。
 - 启用 `CentralPackageTransitivePinningEnabled`，把需要覆盖的传递依赖（例如被上游引入的过时版本、存在已知漏洞的版本）提升为中央版本。未登记的传递依赖保留上游解析结果，但仍参与 NuGet 审核。
 - 产品自身版本（`VersionPrefix`/`VersionSuffix`）在根 `Directory.Build.props` 统一定义，同系列八个包使用同一版本；不按工程分别设置版本号。
-- 精确版本经第 2 节核实后写入中央清单。当前只有 7.x 一个实施分支，`Directory.Packages.props` 就是唯一清单；8.x 稳定版发布后另建分支并维护自己的中央清单，同一分支内不允许工程级版本例外。
+- 精确版本经第 2 节核实后写入中央清单。当前只有一条实施分支，`Directory.Packages.props` 就是唯一清单；8.x 稳定版发布后另建分支并维护自己的中央清单，同一分支内不允许工程级版本例外。
 - 中央清单只允许稳定版本。任何带 `-` 的预发布版本（如 `8.0.0-preview.4`）都不得出现在 `PackageVersion` 中，由单元测试检查拒绝。
 - 数据库驱动只被测试、示例和可运行工具引用，不进入产品包依赖；测试工程使用的驱动版本同样来自中央清单，缺环境时明确跳过，不通过临时改版本或工程级覆盖绕过。
 - 版本升级是一次原子变更：只修改中央清单，然后重新还原、构建并运行受影响测试。NuGet 审核发现的已知漏洞包必须在中央清单中提升到修复版本，不能靠关闭审计或 `NoWarn` 掩盖。
 - 检查项：工程文件不含 `Version` 属性；包内依赖版本与中央清单一致；产品 nupkg 的依赖组不含 ADO.NET 驱动、EF Core 或其他 ORM。
 
-#### 4.1.1 按 TFM 的依赖版本（7.x 五目标）
+#### 4.1.1 按 TFM 的依赖版本（当前五目标）
 
 同一条依赖不能在所有目标框架上用同一个版本。为 netstandard2.0/2.1、net8.0、net9.0、net10.0 生成的多目标程序集，每个 TFM 的依赖组必须与该 TFM 的宿主代际匹配，不能把 net10 时代的包喂给 netstandard 或 net8 资产，否则消费者会被强制升级 Microsoft.Extensions 依赖体系，产生版本冲突或需要绑定重定向：
 
@@ -155,7 +155,7 @@ docs/
 - 每个 TFM 选取该 TFM 上仍受支持的**最低版本线**，且不低于上游同 TFM 依赖组的下限；消费者可以自行解析到更高补丁，本扩展不替消费者锁定高主版本。
 - 8.x 主线只有 `net10.0`，其依赖统一使用 10.0.x；该行在 8.x 稳定版发布并实施后生效，当前不适用。- 在中央包管理中按 TFM 条件登记（`Directory.Packages.props` 中用 `Condition="'$(TargetFramework)' == 'net8.0'"` 的 `ItemGroup` 分别声明），不允许改用工程级 `Version`、`VersionOverride` 或运行时程序集绑定绕过。
 - 单一版本即可覆盖全部 TFM 的依赖不必拆分；只有存在按代际发布的依赖（Microsoft.Extensions.*、缓存、日志、选项等）才按 TFM 分线。
-- 打包后检查 nuspec 依赖组：`netstandard2.0`/`netstandard2.1`/`net8.0` 组不得出现 9.x/10.x 的 Microsoft.Extensions.*，`net9.0` 组不得出现 10.x；主线 `net10.0` 组不得出现低代际依赖。7.7.2 基线已实测通过：`Sharp.OpenIddict.Stores` 7.0.0 的 nuspec 五个依赖组分别为 8.0.2 / 8.0.2 / 8.0.2 / 9.0.21 / 10.0.13，OpenIddict 依赖统一为 7.7.2。
+- 打包后检查 nuspec 依赖组：`netstandard2.0`/`netstandard2.1`/`net8.0` 组不得出现 9.x/10.x 的 Microsoft.Extensions.*，`net9.0` 组不得出现 10.x；主线 `net10.0` 组不得出现低代际依赖。7.7.2 基线已实测通过：`Sharp.OpenIddict.Stores` 的 nuspec 五个依赖组分别为 8.0.2 / 8.0.2 / 8.0.2 / 9.0.21 / 10.0.13，OpenIddict 依赖统一为 7.7.2（该实测在包版本改为自主编号前完成，依赖组与包版本无关）。
 - 只在全局组登记 `Microsoft.Extensions.DependencyInjection` 这类会向下拉取更高代际的包，会把 10.0.x 注入低 TFM 并触发 NU1109 降级错误；因此这类提升必须收进对应 TFM 的条件组，或直接不提升，让上游解析结果保留。
 - 数据库驱动只被测试、示例引用时同样受宿主 TFM 限制：驱动缺少某 TFM 资产（例如 Oracle 驱动只有 `net8.0`/`netstandard2.1`）时，在该 TFM 上不可用，必须在支持矩阵和使用说明中标注，不得用版本提升假装支持。
 - 测试、示例和可运行工具固定 `net10.0`，统一引用 10.0.x；它们引用多目标类库时由 NuGet 选择 `net10.0` 资产，这条不构成“已在 net8/net9 原生运行”的证据。
@@ -171,7 +171,7 @@ provider 包原则上只携带方言、参数适配和 SQL 资源，不强制传
 | MySQL / MariaDB | 8.0+ / 10.6+ | MySqlConnector；两种服务器分别测试 |
 | SQLite | 3.35+ | Microsoft.Data.Sqlite |
 | Oracle | 19c+ | Oracle.ManagedDataAccess.Core |
-| 达梦 | DM8 | DM.DmProvider；原生模式，另测声明支持的 Oracle 兼容模式 |
+| 达梦 | DM8 | DM.DmProvider；按兼容模式分别声明：原生（COMPATIBLE_MODE=0）、Oracle 兼容（=2）、MySQL 兼容（=4），各模式单独验收；SQL92/TDS/DM6/Teradata 模式不作声明 |
 
 这些是计划验收范围，不是已经连接验证的支持声明。达梦不直接复用 Oracle provider，也不因为一条 SQL 能执行就宣布兼容 PostgreSQL 等其他模式。
 
@@ -198,7 +198,7 @@ provider 包原则上只携带方言、参数适配和 SQL 资源，不强制传
 未实测的组合（包括所有“回退”情形是否在真实服务器上语义正确）一律标记为未验证，不列入正式支持范围。这张表由 `PackageAssetTests` 中的资产/依赖检查与实际包内容交叉验证，驱动版本变化时必须重新检查。
 
 
-7.x 的存储与方言包保持五个 TFM；宿主选择适配自身运行时的驱动。README 按“OpenIddict 系列 × 扩展 TFM × 宿主 × 驱动版本 × 服务器版本”列出实际验证组合。未验证的旧驱动组合明确标记，不把早期有 netstandard2.0 资产的驱动自动列入正式支持范围。
+存储与方言包保持五个 TFM；宿主选择适配自身运行时的驱动。README 按“OpenIddict 系列 × 扩展 TFM × 宿主 × 驱动版本 × 服务器版本”列出实际验证组合。未验证的旧驱动组合明确标记，不把早期有 netstandard2.0 资产的驱动自动列入正式支持范围。
 
 方言负责引号、参数名、分页、批量删除和参数类型。对 Oracle/达梦大文本、按名称绑定等标准 ADO.NET 不能完整表达的行为，使用 provider 内部的小型适配器，按实际 command/parameter 类型设置公开驱动属性并缓存必要元数据；不引入全局驱动状态。正式支持只覆盖通过真实驱动验证的实现。
 
@@ -235,7 +235,7 @@ builder.Services.AddOpenIddict()
 
 ## 7. 数据模型与查询索引
 
-首版（7.x）包含四张主表：Applications、Authorizations、Scopes、Tokens。OpenIddict 8.x 的 `OpenIddictResources`、`OpenIddictSessions` 及 Token.SessionId 待其稳定版发布后再纳入。默认主表名称沿用 OpenIddict 常用名称，但这不表示可以直接操作既有 EF 表。
+首版（1.x）包含四张主表：Applications、Authorizations、Scopes、Tokens。OpenIddict 8.x 的 `OpenIddictResources`、`OpenIddictSessions` 及 Token.SessionId 待其稳定版发布后再纳入。默认主表名称沿用 OpenIddict 常用名称，但这不表示可以直接操作既有 EF 表。
 
 字段按 7.7.2 的 Store/Descriptor 逐项覆盖，包括 ClientSecret、JsonWebKeySet、Permissions、Requirements、Settings、本地化名称、Properties。主键建议保持上游默认最大长度 100，并发标记 50，ClientId 100、Scope Name 200、Subject 400；其余长度以锁定版本配置为准。
 
@@ -379,7 +379,7 @@ src/Sharp.OpenIddict.Stores.<Provider>/Sql/
 
 所有脚本文件都以 `.sql.template` 结尾：表前缀与 schema 是运行时配置，写死表名的文件对任何定制部署都是错的，而扩展名必须让“这是模板、不是可直接执行的脚本”一眼可见。
 
-`manifest.json` 逐条记录 provider、适用服务器/模式与最低版本、脚本类型、可用/仅历史保留状态、`rendersTokens`（该文件包含哪些占位符）、源/目标 Series 与 Version、相对 Sql 根目录的路径和 SHA-256。安装脚本的源版本为空；升级脚本必须有确定的源/目标版本。每个模板的头部注释说明用途、适用目标、源/目标版本及事务/失败边界，与清单对应。MySql 清单分别列出 MySQL 和 MariaDB 的适用项；可引用同一物理文件，但必须分别执行验收。有差异时在 variants 中增加明确的专用文件；Dm 原生与声明支持的 Oracle 兼容模式遵循相同规则，不通过人工临时修改脚本适配。
+`manifest.json` 逐条记录 provider、适用服务器/模式与最低版本、脚本类型、可用/仅历史保留状态、`rendersTokens`（该文件包含哪些占位符）、源/目标 Series 与 Version、相对 Sql 根目录的路径和 SHA-256。安装脚本的源版本为空；升级脚本必须有确定的源/目标版本。每个模板的头部注释说明用途、适用目标、源/目标版本及事务/失败边界，与清单对应。MySql 清单分别列出 MySQL 和 MariaDB 的适用项；可引用同一物理文件，但必须分别执行验收。有差异时在 variants 中增加明确的专用文件；Dm 的各声明兼容模式（原生、Oracle 兼容、MySQL 兼容，各对应 `7/install/<mode>/` 下的独立脚本与 `UseDm(mode)` 的独立方言）遵循相同规则，不通过人工临时修改脚本适配。
 
 SQL 源文件统一为 UTF-8 无 BOM、LF，由 `.gitattributes` 固定行尾；摘要针对待交付文件的原始字节计算。对应 provider 的 nupkg 在 `sql/` 下保留 Sql 目录的相对结构，交付适用的模板、清单和 README；不按 TFM 复制多套脚本，不依靠安装 NuGet 自动执行或自动复制到应用目录。用户可从包中提取，包检查验证提取文件与仓库源码逐字节一致。
 
@@ -390,7 +390,7 @@ NuGet 包版本、OpenIddict 版本和数据库架构版本各自管理。架构
 - 已发布的安装和升级 SQL 保持不可变，不覆盖、改名、删除旧文件或通过重算摘要掩盖修改；清单中既有脚本的路径、摘要和版本边界随历史保留。预览包发布的脚本同样适用。未发布的草稿允许修改。
 - 表、列、约束、索引、排序规则或需要持久化数据转换的变更，必须提升受影响 provider 的架构 Version，同时新增目标版本的完整安装脚本、明确起点的增量升级脚本与清单条目。仅修改运行时查询 SQL 且不改变存储结构/数据合同时，可保持架构 Version，但仍要重跑相关数据库合同。
 - 修复已发布脚本的问题也通过新版本交付。已知有缺陷的旧安装脚本在当前清单/说明中标记为“仅历史保留，不再用于新装”，仍为真实已部署的受支持旧架构提供升级/恢复路径。需要恢复部分执行状态时提供针对具体状态的操作说明，不能修改旧文件后让部署方把它当成原脚本重跑。
-- 同系列保留仍声明支持的历史安装与升级链；不支持跨过中间版本时写明执行顺序，不凭文件名自动猜测路线。跨系列脚本由目标系列维护，7.x 包不携带未来 8.x 的安装脚本。
+- 同系列保留仍声明支持的历史安装与升级链；不支持跨过中间版本时写明执行顺序，不凭文件名自动猜测路线。跨系列脚本由目标系列维护，当前系列不携带未来系列的安装脚本。
 
 每次架构变更同时更新第 15 节数据字典、Store/方言所需版本、相关脚本及清单、升级说明、开发进度矩阵和测试。跨分支移植按目标系列重新编写/核对 SQL，不直接复制另一系列的版本记录。
 
@@ -703,7 +703,9 @@ CI 分三个阶段：
 2. 在专用环境执行全部声明支持的服务器/驱动组合，以及 Manager/Server、安装/升级链及结构一致性、事务与并发测试。Oracle/DM 自托管任务也是发布必需结果。
 3. 只有前两阶段成功才产生可发布 nupkg/snupkg 候选；所有子包使用相同版本并精确依赖同版核心/Models。
 
-普通 PR 可在缺少部分外部数据库时给出明确缺口，但不能获得“六数据库已验证”的发布结论。实际发布到 NuGet 由单独发布操作完成，凭据由 CI secrets 提供，不放入仓库。
+普通 PR 可在缺少部分外部数据库时给出明确缺口，但不能获得“六数据库已验证”的发布结论。
+
+触发规则（`.github/workflows/ci-cd.yml`）：分支（main/master）push 与 PR **只执行第 1 阶段门禁**——构建与测试，不装任何数据库服务端；只有 `v*.*.*` 形式的 tag 才触发打包与发布作业：以 tag 版本覆盖 `Version` 打包（`ContinuousIntegrationBuild=true`），校验恰好八个包后推送 nuget.org（凭据来自 `NUGET_API_KEY` secret，`--skip-duplicate`，不吞推送错误），并创建附带全部包的 GitHub Release。tag 一旦存在即代表“该版本已通过第 1 阶段门禁”；第 2 阶段的真库证据仍按第 5 节矩阵单独记录，不因打 tag 自动视为通过。
 
 测试进程虽统一 net10，针对 netstandard2.0/2.1 编译资产仍应有独立加载/调用验证，覆盖低 TFM 的读取、释放与异步接口路径。该验证说明“此资产在 net10 宿主下运行”，不能改写成已验证所有旧宿主。
 

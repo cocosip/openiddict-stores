@@ -1,14 +1,14 @@
 # Sharp.OpenIddict.Stores 开发与进度文档
 
-文档版本：1.7。创建日期：2026-10-19。修订日期：2026-10-19。
+文档版本：1.8。创建日期：2026-10-19。修订日期：2026-10-20。
 
-技术基线：[项目设计文档 v1.9](design.md)。本文是固定维护的开发任务、进度和完成记录，设计中的 API、数据结构和行为合同以设计文档为准。实现需要改变这些合同，应同步修订设计、本文和测试，不能只修改任务验收条件。
+技术基线：[项目设计文档 v1.10](design.md)。本文是固定维护的开发任务、进度和完成记录，设计中的 API、数据结构和行为合同以设计文档为准。实现需要改变这些合同，应同步修订设计、本文和测试，不能只修改任务验收条件。
 
 ## 1. 当前进度
 
 截至 2026-10-19，已完成源码调研、正式设计编写及走查问题修订，已提交的设计基线为 `982c156`（v1.2）；此后补齐精确比较、查询 NULL 语义、任务依赖、逐数据库 SQL 脚本的交付、版本与持续维护验收，依赖中央包管理与逐 TFM 版本分线规则，并将实施基线改为唯一稳定版 OpenIddict 7.7.2（不再依赖任何预览包），任务清单相应收敛为四类实体、四类 Store 和单系列多目标验证，设计收敛为 v1.9。代码与测试已整体纳入版本控制（E-025），工作区不再积压未跟踪文件。当前共 50 项任务，**33 项完成**、17 项未完成（另有 MIG-02、REL-02 按设计暂不适用，CI-01 为部分完成未计入）。已完成的包括 3 项文档、BASE-01 依赖锁定、BASE-02 合同清单、ENG-01 工程布局、ENG-02 四类模型、ENG-04 连接与错误处理、ENG-05 共享测试设施、COMPAT-01～04 五目标与包资产、STORE-01～06 SQLite 方言/Store/集合索引/CAS、LIFE-01～04 关联删除与竞态/批量撤销/独立清理、QUERY-01～03 查询翻译、DB-01 SQLite 完整验收、DB-02 SQL Server 方言与真库验收、MIG-01 版本误用检查、MIG-04 结构一致性部分。ENG-03 的配置/DI/四类 Store 注册已可用，但任务描述中的其余成员仍未收尾，故保持未勾选。设计文档状态仍为“设计评审稿”，完成编写不代表用户已经确认设计。
 
-当前仓库已有 `.slnx`、集中构建与包管理文件、8 个产品工程、3 个测试工程和 2 个示例骨架（不提交 `global.json`，见 E-027），可还原、构建、打包，本地通过 383 项测试并如实跳过 16 项需要真实 SQL Server 的用例（85 项单元：工程约束、Store 合同冻结、模型列映射、注册与选项校验、JSON/UTC 转换、六 provider 方言与模板；298 项集成：SQLite 安装脚本与完整验收、六 provider 脚本结构与资产检查、四类 Store 真库合同、集合索引与 CAS 合同、批量撤销与清理合同、关联删除矩阵与竞态、查询回调翻译、访问器与无截断、包资产与低 TFM 加载、包内 SQL 逐字节一致性、原生 Manager 端到端、连接生命周期与取消、自定义前缀/schema 的安装副本、PostgreSQL 与 MySQL/Oracle/达梦方言与模板渲染）。核心包已具备 Builder/选项/连接工厂/默认实体注册、转换器与四类 Store，四类 Store 已全部注册进 DI，并已验证可经原生 Manager（含非泛型接口）创建、查找与更新；Store 的读写、删除、撤销、清理与 IQueryable 查询回调均已可用。六 provider 的方言与安装脚本模板均已交付，其中 **SQLite 有本地真库证据**（E-035），SQL Server 与 PostgreSQL/MySQL/MariaDB/Oracle/达梦 待真库验收（E-028）；协议联调按约束暂不实施。以下未完成项均为计划，不代表已有可调用功能。
+当前仓库已有 `.slnx`、集中构建与包管理文件、8 个产品工程、3 个测试工程和 2 个示例骨架（不提交 `global.json`，见 E-027），可还原、构建、打包，本地通过 396 项测试并如实跳过 16 项需要真实 SQL Server 的用例（98 项单元：工程约束、Store 合同冻结、模型列映射、注册与选项校验、JSON/UTC 转换、六 provider 方言与模板、达梦多模式、SQL 生成工具；298 项集成：SQLite 安装脚本与完整验收、六 provider 脚本结构与资产检查、四类 Store 真库合同、集合索引与 CAS 合同、批量撤销与清理合同、关联删除矩阵与竞态、查询回调翻译、访问器与无截断、包资产与低 TFM 加载、包内 SQL 逐字节一致性、原生 Manager 端到端、连接生命周期与取消、自定义前缀/schema 的安装副本、PostgreSQL 与 MySQL/Oracle/达梦方言与模板渲染）。核心包已具备 Builder/选项/连接工厂/默认实体注册、转换器与四类 Store，四类 Store 已全部注册进 DI，并已验证可经原生 Manager（含非泛型接口）创建、查找与更新；Store 的读写、删除、撤销、清理与 IQueryable 查询回调均已可用。六 provider 的方言与安装脚本模板均已交付，其中 **SQLite 有本地真库证据**（E-035），SQL Server 与 PostgreSQL/MySQL/MariaDB/Oracle/达梦 待真库验收（E-028）；协议联调按约束暂不实施。2026-10-20 按用户要求新增三项交付：达梦从单一 native 模式扩展为三种声明兼容模式（E-040）、SQL 部署脚本生成工具（E-041）、CI/CD 工作流——分支只构建测试、tag 才打包发布（E-042），并修复了本地门禁"测试先于打包"的顺序缺陷（E-039）。以下未完成项均为计划，不代表已有可调用功能。
 
 | 阶段 | 任务编号 | 当前状态 | 阶段完成条件 |
 | --- | --- | --- | --- |
@@ -17,10 +17,10 @@
 | P2 工程与基础设施 | ENG-01～ENG-05 | ENG-01/02 完成；ENG-03 已完成配置/DI/Store 注册；ENG-04 完成（E-037）；ENG-05 完成（E-038） | 7.x 五目标工程、模型、DI、连接与测试设施可用 |
 | P3 SQLite 基础读写 | STORE-01～STORE-06 | 全部完成 | 四类实体的基础读写、Token/Scope 简单删除、集合索引及 Update CAS/事务基础通过；完整关联删除在 P4 验收 |
 | P4 查询与生命周期 | QUERY-01～QUERY-03、LIFE-01～LIFE-05 | QUERY-01～03 查询与流式读取、LIFE-01～04 删除/撤销/清理完成；LIFE-05 未开始（需服务端联调） | 查询、流式读取、删除、撤销和清理合同通过 |
-| P5 数据库验收 | DB-01～DB-07 | DB-01 完成并有本地真库证据（E-035）；DB-02 完成；DB-03～DB-07 方言与模板已交付但真库未验证（E-028） | 七种服务器及声明的 DM 模式分别通过完整验收 |
+| P5 数据库验收 | DB-01～DB-07 | DB-01 完成并有本地真库证据（E-035）；DB-02 完成；DB-03～DB-07 方言与模板已交付但真库未验证（E-028）；DB-07 现覆盖达梦三种声明模式（E-040） | 七种服务器及声明的 DM 三种模式分别通过完整验收 |
 | P6 多目标与包资产 | COMPAT-01～COMPAT-04 | 全部完成 | 五 TFM 构建、包资产与驱动兼容性记录通过 |
 | P7 脚本维护、升级、协议与示例 | MIG-01～MIG-04、APP-01～APP-04 | MIG-01 完成、MIG-04 结构部分完成（E-030/E-034）；MIG-02 按设计不适用；MIG-03、APP-01～04 未开始 | SQL 资产维护、协议回归和两个 net10 示例完成 |
-| P8 CI 与交付候选 | CI-01～CI-03、REL-01～REL-02 | 未开始 | 门禁通过，具备可审阅的包和证据 |
+| P8 CI 与交付候选 | CI-01～CI-03、REL-01～REL-02 | CI-01：本地门禁（E-036）与 CI/CD 工作流（E-042）已交付，工作流待真实 runner 首跑确认；CI-02、CI-03、REL-01 未开始 | 门禁通过，具备可审阅的包和证据 |
 
 这是按交付依赖组织的阶段，不是固定工期。迁移用例、Manager 测试和使用说明应随功能持续补充，P7/P8 负责最终联验，不能将测试统一推迟到最后。
 
@@ -197,7 +197,7 @@ JSON 是集合权威数据；四张辅助表同事务维护，摘要仅筛选候
 
 前置：目标系列功能、文档和验证可用；CI 可随前面阶段逐步落地，正式候选依赖其全部必需结果。对应设计第 18、19 节。
 
-- [ ] **CI-01 构建、单元、SQLite 与包资产阶段。** 本地门禁已交付（E-036）：`scripts/verify.ps1` 串起还原/五 TFM Release 构建/测试/打包/包内容检查，实测失败退出码为 1。剩余：真实 CI 平台配置、MIG-03 的 SQL 历史与发布历史检查。
+- [ ] **CI-01 构建、单元、SQLite 与包资产阶段。** 本地门禁已交付（E-036）：`scripts/verify.ps1` 串起还原/五 TFM Release 构建/打包/测试/包内容检查（打包先于测试的顺序修复见 E-039），实测失败退出码为 1。CI/CD 工作流已交付（E-042）：分支只构建测试，tag 才打包发布 NuGet 并建 GitHub Release；工作流尚未在真实 runner 上首跑。剩余：真实 runner 首跑确认、仓库配置 `NUGET_API_KEY`、MIG-03 的 SQL 历史与发布历史检查。
   验收：还原/Release 构建各 TFM，执行单元及 SQLite 合同、公开 API/依赖/消费者检查；执行 MIG-03 的 SQL 清单/摘要、发布历史与包提取一致性检查，验证包可先作为门禁输入打包但不标为发布候选；脚本可重复执行，所有可运行辅助项目保持 net10，失败不能吞掉退出码。
 - [ ] **CI-02 真库与协议、升级阶段。** 产物：服务器任务配置与测试结果。
   验收：七种服务器及 DM 声明模式、Manager/Server、MIG-01～04 的安装/升级链/结构一致性/数据保留和并发结果齐备；Oracle/DM 自托管环境使用专用 schema 与 secrets，缺环境时明确阻塞发布门禁，跳过不能当成功。
@@ -220,8 +220,9 @@ JSON 是集合权威数据；四张辅助表同事务维护，摘要仅筛选候
 | MariaDB 10.6+ | MySql | 同一份脚本与方言；**真库未验证**，不得以 MySQL 结果代替（E-028） | 包资产层面已核对；运行时连接未验证 | E-031 |
 | SQLite 3.35+ | Sqlite | 部分通过（8 项安装脚本真库用例含自定义前缀，见 E-027） | 已实测：Microsoft.Data.Sqlite 10.0.13 在 net10 宿主加载 | E-027 |
 | Oracle 19c+ | Oracle | 实现与脚本模板已交付；**真库未验证**（E-028） | 驱动仅 net8.0/netstandard2.1，**ns2.0 宿主不可用**；连接未验证 | E-032 |
-| DM8 原生模式 | Dm | 实现与脚本模板已交付；**真库未验证，且比较/分页两项为发布阻塞**（E-033） | 驱动无 net10 资产，真库验收须在 net8/net9 宿主执行 | E-033 |
-| DM8 Oracle 兼容模式 | Dm | **未实现，不作支持声明**：需独立清单条目、脚本与验收（E-033） | — | — |
+| DM8 原生模式（COMPATIBLE_MODE=0） | Dm | 实现与脚本模板已交付；**真库未验证，且比较/分页两项为发布阻塞**（E-033、E-040） | 驱动无 net10 资产，真库验收须在 net8/net9 宿主执行 | E-033、E-040 |
+| DM8 Oracle 兼容模式（=2） | Dm | 实现与脚本模板已交付（独立方言与脚本）；**真库未验证**（E-040） | 同上 | E-040 |
+| DM8 MySQL 兼容模式（=4） | Dm | 实现与脚本模板已交付（独立方言与脚本）；**真库未验证**（E-040） | 同上 | E-040 |
 
 “完整合同通过”需要以下检查全部通过，记录中列出结果文件和实际运行版本：
 
@@ -248,8 +249,9 @@ JSON 是集合权威数据；四张辅助表同事务维护，摘要仅筛选候
 | MariaDB 10.6+ | 同一份模板与渲染入口；执行未在本地验证（E-028） | 不适用：首版无前序架构 | 清单分别列 MySQL/MariaDB 两条；执行说明已交付 | E-031 |
 | SQLite 3.35+ | 通过（E-026 默认前缀；E-027 自定义前缀） | 不适用：首版无前序架构 | 通过（E-026、E-027） | E-026、E-027 |
 | Oracle 19c+ | 模板与渲染入口已交付；执行未在本地验证（E-028） | 不适用：首版无前序架构 | 清单/摘要/占位符检查通过；执行说明已交付 | E-032 |
-| DM8 原生模式 | 模板与渲染入口已交付；执行未在本地验证（E-028） | 不适用：首版无前序架构 | 清单声明 native 模式并被测试锁定；执行说明含阻塞项 | E-033 |
-| DM8 Oracle 兼容模式 | 未验证，不作支持声明 | 不适用 | 未验证 | — |
+| DM8 原生模式 | 模板与渲染入口已交付（`7/install/native/`）；执行未在本地验证（E-028） | 不适用：首版无前序架构 | 清单声明 native 模式并被测试锁定；执行说明含阻塞项 | E-033、E-040 |
+| DM8 Oracle 兼容模式 | 模板与渲染入口已交付（`7/install/oracle-compatible/`）；执行未在本地验证（E-028） | 不适用：首版无前序架构 | 清单条目/摘要/占位符检查通过；执行说明含阻塞项 | E-040 |
+| DM8 MySQL 兼容模式 | 模板与渲染入口已交付（`7/install/mysql-compatible/`）；执行未在本地验证（E-028） | 不适用：首版无前序架构 | 清单条目/摘要/占位符检查通过；执行说明含阻塞项 | E-040 |
 
 证据另列脚本路径、清单/SQL SHA-256、源/目标 Series/Version、执行工具/服务器/模式、schema/prefix、安装与各段升级结果、结构比较和保留数据断言。结构或索引变更的完成记录必须同时覆盖受影响 provider 的新装与升级；只改代码或只补一份最新建表 SQL 不能关闭任务。
 
@@ -712,6 +714,8 @@ dotnet pack Sharp.OpenIddict.Stores.slnx --configuration Release --no-build --ou
 
 ### E-033：达梦方言与安装脚本（DB-07 实现部分），只声明 native 模式
 
+> 2026-10-20：本记录的"只声明 native"边界已被 E-040 扩展为三种声明兼容模式；下文保留当时的事实。
+
 - 任务：DB-07（实现部分）；系列：7.7.2。
 - 日期：2026-10-19；实现：本次提交。
 - 产物：`src/Sharp.OpenIddict.Stores.Dm/`（`OpenIddictStoreDmDialect.cs`、`OpenIddictStoreDmBuilderExtensions.cs`、`Sql/7/install/v0001.sql.template`、`Sql/manifest.json`、`Sql/README.md`）；测试并入 `OracleAndDmDialectTests`。
@@ -794,6 +798,59 @@ dotnet pack Sharp.OpenIddict.Stores.slnx --configuration Release --no-build --ou
 - 结果与缺口：共享设施与隔离保护完成。ENG-05 中“回滚故障注入、并发时序控制、强制摘要碰撞”三项局部测试手段此前已由 LIFE/QUERY 合同测试覆盖，不再重复建设；`provider fixture` 目前只有 SQL Server 一个真实 fixture，其余 provider 的真实 fixture 需在对应真库环境建立（DB-03～07）。
 
 
+### E-039：本地门禁顺序修复：打包先于测试（CI-01 缺陷）
+
+- 任务：CI-01；系列：7.7.2。
+- 日期：2026-10-20。
+- 缺陷：`scripts/verify.ps1` 原顺序为还原→构建→**测试→打包**，而 `PackageAssetTests` 在测试阶段读取 `artifacts/` 的 nupkg 做逐字节一致性检查。在干净检出（无包）或包陈旧（例如 SQL 模板从 `v0001.sql` 改名 `v0001.sql.template` 之后）门禁必然失败，且失败信息（"has no source file"）指向陈旧包而非真实缺陷；本次在本地复现了六 provider 全部失败的形态。
+- 修复：调整为还原→构建→**打包→测试**，测试读到的包始终由当前树生成；脚本内注释说明这一顺序约束。
+- 验证：修复后 `pwsh ./scripts/verify.ps1` 端到端通过（修复前同一脚本在测试步骤失败）。
+
+### E-040：达梦三种声明兼容模式（DB-07 实现扩展）
+
+- 任务：DB-07（实现部分）；系列：7.7.2。
+- 日期：2026-10-20。
+- 依据：用户明确要求"达梦要支持所有的模式，不是单纯某一个模式"。按设计 5/10.1 的"一模式一条目一脚本一验收"规则，从仅 native 扩展为三种声明模式，各自独立方言与脚本；SQL92/TDS/DM6/Teradata 继续不作声明（需条目、脚本与验收才能声明）。
+- 产物：
+  - `OpenIddictStoreDmCompatibilityMode`（Native=COMPATIBLE_MODE 0 / OracleCompatible=2 / MySqlCompatible=4）；`UseDm(mode)` 按模式注册方言，缺省仍为 native，既有部署不受影响。
+  - 共享基类 `OpenIddictStoreDmDialectBase`（引号、参数、精确比较、日期绑定）；`OpenIddictStoreDmDialect`（native，`LIMIT/OFFSET`）、`OpenIddictStoreDmOracleCompatibleDialect`（`OFFSET n ROWS / FETCH NEXT m ROWS ONLY`）、`OpenIddictStoreDmMySqlCompatibleDialect`（`LIMIT/OFFSET`）。
+  - 脚本按模式拆分：`Sql/7/install/<mode>/v0001.sql.template` 三份，头部声明模式与该模式行为，DDL 正文逐字节一致（类型系统不受 COMPATIBLE_MODE 门控），并有测试锁定三份正文一致；manifest 三条目各自 SHA-256；`Sql/README.md` 重写为三模式部署说明，并新增部署前提：**实例必须 CASE_SENSITIVE=1**（该参数建库后不可改，与兼容模式无关）。
+- 测试：`OracleAndDmDialectTests` 重写——三个模式常量、各模式分页形态、按模式注册（含缺省 native 回退）、manifest 恰好三条目且未声明模式不得混入、三脚本正文一致且含 SchemaVersions 种子记录；集成侧 `SchemaConsistencyTests` 与 `DeploymentScript` 按模式目录解析达梦模板。
+- 缺口：三种模式仍全部**待真库验收**（E-028 约束，须在 net8/net9 宿主）；每模式的精确比较与分页形态确认是发布阻塞，未验收前不得宣布任一模式"支持"。
+
+### E-041：SQL 部署脚本生成工具
+
+- 任务：新交付（支撑设计 10.1 的"先渲染后执行"部署流程；不占用既有任务编号）；系列：7.7.2。
+- 日期：2026-10-20。
+- 产物：`tools/Sharp.OpenIddict.Stores.SqlTool`（net10.0，`IsPackable=false`，不影响"八个包"的计数与检查）；六 provider 的 `Sql/` 资产以嵌入资源随工具携带（与包内容同源，摘要仍以清单为准）；`tools/README.md`；`Sql/README.md` 互相引用。
+- 行为：`--list` 列出全部 provider 与清单条目；`--provider`+`--mode`（仅达梦）+`--prefix`+`--schema`（+可选 `--server`）渲染部署副本，输出到标准输出或 `--out`（UTF-8 无 BOM）；渲染结果必须无 `__PREFIX__`/`__SCHEMA__` 残留；未知 provider/模式、非达梦传 `--mode` 均以退出码 2 与用法说明拒绝。MySql 的 MySQL/MariaDB 两条目共享同一文件，无需 `--server` 即可解析，仅当候选脚本确实不同时才要求消歧。
+- 测试：`SqlToolTests` 10 项（清单覆盖与模式集合、默认与自定义前缀/schema 到表和索引、三模式选择、缺省 native 回退、种子记录存在、非达梦拒绝 mode、未知 provider/模式拒绝）。
+- 实现注意：嵌入资源名按路径段改写为合法标识符（`7`→`_7`、`oracle-compatible`→`oracle_compatible`），资源匹配采用"仅保留字母数字"的规范化比较，不依赖改写算法细节。
+
+### E-043：包版本与架构 Series 自主编号（脱离上游版本号）
+
+- 任务：版本策略修订（用户决定）；系列：1.0.0。
+- 日期：2026-10-20。
+- 依据：用户明确要求"包版本不要基于 OpenIddict，扩展不一定跟着它走"。原方案"包的主版本表达 OpenIddict 兼容系列"（设计 v1.9）被否决。
+- 变更（一次完整重编号，保持全部一致性检查生效）：
+  - `Directory.Build.props` `VersionPrefix`：`7.0.0` → `1.0.0`；`PackageAssetTests` 的版本断言与包路径断言同步。
+  - 数据库架构 `RequiredSeries`：`"7"` → `"1"`（`OpenIddictStoreSchema`）；六套安装模板的种子记录 `('7', 1)` → `('1', 1)` 与头部声明、六个 `Sql/README.md`、六个 `manifest.json`（`series`/`targetSeries`/`path`）同步；脚本目录 `Sql/7/` 整体重命名为 `Sql/1/`（SQLite 的 upgrade 子目录为空，随目录一并改名）。
+  - 对上游的兼容性表达收缩到 NuGet 依赖本身：仍锁定 OpenIddict 7.7.2，发布依赖范围 `[7.7.2,8.0.0-0)` 不变；设计文档 §3 已改写为自主编号方案（设计 v1.10）。
+- 影响面：版本守卫现在要求 `Series='1'`。旧编号只存在于本仓库本地验收产物（SQLite 临时库与本地 nupkg，从未发布），无外部部署受影响；`artifacts/` 陈旧包由门禁的打包先于测试顺序（E-039）自动重建。
+- 测试：全量门禁通过（重命名与重编号后重跑）；`SqlAssetTests`/`SchemaConsistencyTests`/`PackageAssetTests`/`SqliteInstallScriptTests` 等按新路径、新 Series、新版本断言。
+
+
+### E-042：CI/CD 工作流（CI-01 远端部分）
+
+- 任务：CI-01；系列：7.7.2。
+- 日期：2026-10-20。
+- 依据：用户要求"master/main 分支仅做编译测试，tag 时才编译 nuget 及发布"，组织方式参考 cocosip/Locus 的单工作流双作业结构。
+- 产物：`.github/workflows/ci-cd.yml`。
+  - `build-and-test`：push 到 main/master、PR 到 main/master、手动触发；在 ubuntu runner 上执行 `scripts/verify.ps1`——与本地同一份门禁（还原、五 TFM 构建、打包、测试），不装任何数据库服务端，服务器套件如实跳过。
+  - `publish`：仅 `v*.*.*` tag 且在 build-and-test 之后；以 tag 版本 `/p:Version=` + `/p:ContinuousIntegrationBuild=true` 打包，校验恰好 8 个包，`dotnet nuget push` 至 nuget.org（secret `NUGET_API_KEY`，`--skip-duplicate`，不吞推送错误），`softprops/action-gh-release` 创建 Release 并附全部包。
+- 缺口：工作流尚未在真实 runner 上执行过，首次 push 后确认；`NUGET_API_KEY` 需在仓库设置配置；CI-01 剩余的 MIG-03 发布历史检查仍未开始。
+
+
 后续任务完成时复制以下模板并填写，再勾选任务；同一任务有多个系列或环境时分别列明，不覆盖过去的失败/修复记录。
 ```text
 ### E-012：Application Store 与集合索引
@@ -835,9 +892,9 @@ dotnet pack Sharp.OpenIddict.Stores.slnx --configuration Release --no-build --ou
 
 ### 9.1 当前状态快照
 
-- 已完成 **33 / 50** 项（CI-01 部分完成，未计入）。全部完成的阶段：P0 文档基线、P2 工程与基础设施（ENG-01～ENG-05）、P3 SQLite 基础读写（6/6）、P6 多目标与包资产（4/4）；P4 的 QUERY-01～03 与 LIFE-01～04 完成。六 provider 的方言与安装脚本模板均已交付（E-029～E-033），但**只有 DB-01（SQLite）与 DB-02 有真库验收记录**，DB-03～DB-07 的真库一栏按 §5 记“未验证”（见下方约束与 E-028）。本地基线：383 项通过（85 单元 + 298 集成），16 项跳过，8 个包；门禁入口 `scripts/verify.ps1`（E-036）。基线已整体提交并纳入版本控制（E-025、E-026、E-029）。
-- 验证基线（本地，无任何数据库服务器）：`dotnet build Sharp.OpenIddict.Stores.slnx -c Release` 0 警告 0 错误；`dotnet pack -o artifacts` 产出 8 个包；`dotnet test` 通过 **383 项（85 单元 + 298 集成），16 项显式跳过**——跳过的是 `SqlServerStoreContractTests`，需要真实 SQL Server。任何改动的底线是不低于这组数字，且跳过项不得减少。
-- 已具备的能力：四类 Store 的全部 145 个成员、集合索引（JSON 权威 + SHA-256 候选 + Ordinal 复核）、Update CAS、七种批量撤销、Prune 清理、关联删除矩阵、IQueryable 回调翻译、逐行异步读取、五 TFM 与分 TFM 依赖组、八个包资产、六套方言（SQLite、SQL Server、PostgreSQL、MySQL/MariaDB、Oracle、达梦 native）。
+- 已完成 **33 / 50** 项（CI-01 部分完成，未计入；2026-10-20 新增交付：达梦三种声明兼容模式 E-040、SQL 生成工具 E-041、CI/CD 工作流 E-042、门禁顺序修复 E-039、包版本与架构 Series 自主编号 E-043，均不改变任务勾选状态）。全部完成的阶段：P0 文档基线、P2 工程与基础设施（ENG-01～ENG-05）、P3 SQLite 基础读写（6/6）、P6 多目标与包资产（4/4）；P4 的 QUERY-01～03 与 LIFE-01～04 完成。六 provider 的方言与安装脚本模板均已交付（E-029～E-033），但**只有 DB-01（SQLite）与 DB-02 有真库验收记录**，DB-03～DB-07 的真库一栏按 §5 记“未验证”（见下方约束与 E-028）。本地基线：396 项通过（98 单元 + 298 集成），16 项跳过，8 个包；门禁入口 `scripts/verify.ps1`（E-036，打包先于测试的顺序见 E-039）。基线已整体提交并纳入版本控制（E-025、E-026、E-029）。
+- 验证基线（本地，无任何数据库服务器）：`dotnet build Sharp.OpenIddict.Stores.slnx -c Release` 0 警告 0 错误；`dotnet pack -o artifacts` 产出 8 个包；`dotnet test` 通过 **396 项（98 单元 + 298 集成），16 项显式跳过**——跳过的是 `SqlServerStoreContractTests`，需要真实 SQL Server。任何改动的底线是不低于这组数字，且跳过项不得减少。
+- 已具备的能力：四类 Store 的全部 145 个成员、集合索引（JSON 权威 + SHA-256 候选 + Ordinal 复核）、Update CAS、七种批量撤销、Prune 清理、关联删除矩阵、IQueryable 回调翻译、逐行异步读取、五 TFM 与分 TFM 依赖组、八个包资产、六套方言（SQLite、SQL Server、PostgreSQL、MySQL/MariaDB、Oracle、达梦三种声明模式）、SQL 部署脚本生成工具（`tools/`，E-041）、CI/CD 工作流（`.github/workflows/ci-cd.yml`，E-042）。
 - 仓库不提交 `global.json`（E-027）：工程只要求 .NET 10，换机器不会因补丁号对不上而构建失败。
 - **不执行任何需要连接数据库服务端的测试**（§3 的硬约束）。SQL Server 与 PostgreSQL 等外部服务器验收由用户环境执行；本地只有 SQLite 文件库是真库证据。
 
