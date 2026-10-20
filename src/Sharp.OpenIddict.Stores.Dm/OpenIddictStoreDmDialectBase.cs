@@ -43,25 +43,32 @@ public abstract class OpenIddictStoreDmDialectBase : IOpenIddictStoreDialect
 
     /// <inheritdoc />
     /// <remarks>
-    /// A plain equality is emitted. Whether a given instance compares VARCHAR case-, accent-, and
-    /// trailing-space-sensitively depends on its character set and its <c>CASE_SENSITIVE</c> initialization,
-    /// which no compatibility mode overrides; confirming this on a real server in the declared mode is a
-    /// release blocker recorded per mode in <c>Sql/README.md</c> (design 16.1.1).
+    /// <para>
+    /// Two comparisons are required. A plain equality is exact for case and accents on an instance
+    /// initialized with <c>CASE_SENSITIVE=1</c>, but DM8 compares strings blank-padded: <c>client</c> and
+    /// <c>client </c> compare equal, so <c>CHAR_LENGTH</c> must reject the length difference. Verified
+    /// against real servers in the declared modes; see the acceptance record. (<c>CHAR_LENGTH</c> is used
+    /// over <c>LENGTH</c>/byte functions because it counts characters, so the guard cannot depend on the
+    /// character set of either side.)
+    /// </para>
     /// </remarks>
     public string BuildExactStringEquals(string column, string parameterName)
-        => $"({column} = :{parameterName})";
+        => $"({column} = :{parameterName} AND CHAR_LENGTH({column}) = CHAR_LENGTH(:{parameterName}))";
 
     /// <inheritdoc />
     /// <remarks>
-    /// A plain <c>&lt;&gt;</c> yields UNKNOWN for NULL and would silently drop those rows; the NULL branch keeps
-    /// them (design 16.2.2).
+    /// A plain <c>&lt;&gt;</c> yields UNKNOWN for NULL and would silently drop those rows; the NULL branch
+    /// keeps them (design 16.2.2). The length guard mirrors <see cref="BuildExactStringEquals"/>: DM8
+    /// compares blank-padded, so a trailing-space variant must count as different here as well.
     /// </remarks>
     public string BuildExactStringNotEqualsIncludingNull(string column, string parameterName)
-        => $"({column} IS NULL OR {column} <> :{parameterName})";
+        => $"({column} IS NULL OR {column} <> :{parameterName} " +
+           $"OR CHAR_LENGTH({column}) <> CHAR_LENGTH(:{parameterName}))";
 
     /// <inheritdoc />
+    /// <remarks>Column-to-column comparison needs the same two checks as the parameter form.</remarks>
     public string BuildExactStringColumnEquals(string left, string right)
-        => $"({left} = {right})";
+        => $"({left} = {right} AND CHAR_LENGTH({left}) = CHAR_LENGTH({right}))";
 
     /// <inheritdoc />
     /// <remarks>

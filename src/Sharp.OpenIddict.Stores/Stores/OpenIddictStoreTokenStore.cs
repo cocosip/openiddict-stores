@@ -380,13 +380,13 @@ public class OpenIddictStoreTokenStore<TToken> : OpenIddictStoreBase, IOpenIddic
         return $@"
             DELETE FROM {tokens}
             WHERE {Column("Id")} IN (
-                SELECT t.{Column("Id")} FROM {tokens} AS t
+                SELECT t.{Column("Id")} FROM {tokens} t
                 WHERE t.{Column("CreationDate")} IS NOT NULL
                   AND t.{Column("CreationDate")} < {Parameter("threshold")}
                   AND (
                         ({notInactive} AND {notValid})
                      OR EXISTS (
-                            SELECT 1 FROM {authorizations} AS a
+                            SELECT 1 FROM {authorizations} a
                             WHERE a.{Column("Id")} = t.{Column("AuthorizationId")}
                               AND {authorizationNotValid})
                      OR (t.{Column("ExpirationDate")} IS NOT NULL AND t.{Column("ExpirationDate")} < {Parameter("now")})

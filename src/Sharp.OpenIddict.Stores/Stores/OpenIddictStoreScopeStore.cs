@@ -197,11 +197,16 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
 
         await using var session = await CreateSessionAsync(cancellationToken).ConfigureAwait(false);
 
-        // The digest only narrows candidates; a final Ordinal re-check against the authoritative JSON value is done, and each Scope is returned once.
+        // The digest only narrows candidates; a final Ordinal re-check against the authoritative JSON value
+        // is done, and each Scope is returned once. No SELECT DISTINCT: the scope table carries CLOB/NCLOB
+        // columns, which Oracle and DM refuse to place under DISTINCT (ORA-00932), so duplicate candidate
+        // rows are folded here instead — the Ordinal re-check stays authoritative either way.
         var sql = $@"
-            SELECT DISTINCT s.* FROM {Table(Schema.Scopes)} s
+            SELECT s.* FROM {Table(Schema.Scopes)} s
             INNER JOIN {Table(Schema.ScopeResources)} i ON i.{Column("ScopeId")} = s.{Column("Id")}
             WHERE i.{Column("ResourceHash")} = {Parameter("hash")}";
+
+        var returned = new HashSet<string>(StringComparer.Ordinal);
 
         await foreach (var candidate in session.StreamAsync(
             sql,
@@ -210,8 +215,14 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
             cancellationToken).ConfigureAwait(false))
         {
             var scope = (TScope)candidate;
+            var model = (OpenIddictStoreScope)(object)scope;
 
-            if (OpenIddictStoreJson.DeserializeStrings(((OpenIddictStoreScope)(object)scope).Resources)
+            if (!returned.Add(model.Id!))
+            {
+                continue;
+            }
+
+            if (OpenIddictStoreJson.DeserializeStrings(model.Resources)
                 .Contains(resource, StringComparer.Ordinal))
             {
                 yield return scope;

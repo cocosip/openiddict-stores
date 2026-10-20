@@ -200,7 +200,10 @@ public abstract class OpenIddictStoreBase
         }
 
         var plan = CreateQueryBuilder<TEntity>().Build<TResult>(table, Record(query), forCount: true);
-        var sql = $"SELECT COUNT(*) FROM ({plan.Sql}) AS translated";
+
+        // The derived-table alias carries no AS: Oracle rejects AS on an inline view, and every other
+        // provider accepts the bare form.
+        var sql = $"SELECT COUNT(*) FROM ({plan.Sql}) translated";
 
         await using var session = await CreateSessionAsync(cancellationToken).ConfigureAwait(false);
 

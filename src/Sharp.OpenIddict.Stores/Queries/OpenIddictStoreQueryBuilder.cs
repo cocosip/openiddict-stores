@@ -178,9 +178,11 @@ internal sealed class OpenIddictStoreQueryBuilder<TEntity>
 
         if (outerPredicates.Count > 0)
         {
-            // A Where after Take must filter the limited set, so it wraps the inner statement.
+            // A Where after Take must filter the limited set, so it wraps the inner statement. The derived
+            // table alias carries no AS: Oracle rejects AS on an inline view, and every other provider
+            // accepts the bare form.
             var outer = string.Join(" AND ", outerPredicates);
-            sql = $"SELECT * FROM ({sql.Trim()}) AS limited WHERE {outer}";
+            sql = $"SELECT * FROM ({sql.Trim()}) limited WHERE {outer}";
         }
 
         // Parameters are collected last: every predicate above may still register new ones.

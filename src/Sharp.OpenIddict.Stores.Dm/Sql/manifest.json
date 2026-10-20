@@ -13,7 +13,7 @@
       "targetSeries": "1",
       "targetVersion": 1,
       "path": "1/install/native/v0001.sql.template",
-      "sha256": "E5A628EB68973C68BF17FF2F1052B7E35BDA7EA21E58F77D7CAF76D6B646AF1C"
+      "sha256": "B11E3BD314F7A7080345AF7B28F617CBD75CD5546CE932918BA8738E4AC476C0"
     },
     {
       "type": "install",
@@ -26,7 +26,7 @@
       "targetSeries": "1",
       "targetVersion": 1,
       "path": "1/install/oracle-compatible/v0001.sql.template",
-      "sha256": "168461B36A4633B71392EF25C7B84782CFD6BD3DE8D5B022B8876817286B910F"
+      "sha256": "193910AC857E783D53EBCB9AF8D563322BFF8FAA2E395DB5053D2CA578040E45"
     },
     {
       "type": "install",
@@ -39,7 +39,7 @@
       "targetSeries": "1",
       "targetVersion": 1,
       "path": "1/install/mysql-compatible/v0001.sql.template",
-      "sha256": "D8A0AC4738FFC90653A95B88E263842B7557D369C9428F649152F01238560176"
+      "sha256": "C8E6392F4AFD40624E50F82C826192D9760AB1DB8BEE093622BB3B136CFFE042"
     }
   ]
 }

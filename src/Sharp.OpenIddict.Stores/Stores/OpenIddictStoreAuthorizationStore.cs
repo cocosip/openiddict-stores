@@ -451,12 +451,12 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
         return $@"
             DELETE FROM {authorizations}
             WHERE {Column("Id")} IN (
-                SELECT a.{Column("Id")} FROM {authorizations} AS a
+                SELECT a.{Column("Id")} FROM {authorizations} a
                 WHERE a.{Column("CreationDate")} IS NOT NULL
                   AND a.{Column("CreationDate")} < {Parameter("threshold")}
                   AND ({notValid} OR {Dialect.BuildExactStringEquals("a." + Column("Type"), "adhoc")})
                   AND NOT EXISTS (
-                        SELECT 1 FROM {tokens} AS t
+                        SELECT 1 FROM {tokens} t
                         WHERE t.{Column("AuthorizationId")} = a.{Column("Id")})
                 ORDER BY a.{Column("Id")}
                 {Dialect.BuildPaging(PruneBatchSize, null)}

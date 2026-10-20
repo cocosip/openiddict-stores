@@ -656,11 +656,16 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
 
         await using var session = await CreateSessionAsync(cancellationToken).ConfigureAwait(false);
 
-        // The digest only narrows candidates; a final Ordinal re-check against the authoritative JSON value is done, and each entity is returned once.
+        // The digest only narrows candidates; a final Ordinal re-check against the authoritative JSON value
+        // is done, and each entity is returned once. No SELECT DISTINCT: the application table carries
+        // CLOB/NCLOB columns, which Oracle and DM refuse to place under DISTINCT (ORA-00932), so duplicate
+        // candidate rows are folded here instead — the Ordinal re-check stays authoritative either way.
         var sql = $@"
-            SELECT DISTINCT a.* FROM {Table(Schema.Applications)} a
+            SELECT a.* FROM {Table(Schema.Applications)} a
             INNER JOIN {Table(table)} i ON i.{Column(ownerColumn)} = a.{Column("Id")}
             WHERE i.{Column(hashColumn)} = {Parameter("hash")}";
+
+        var returned = new HashSet<string>(StringComparer.Ordinal);
 
         await foreach (var candidate in session.StreamAsync(
             sql,
@@ -670,6 +675,11 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
         {
             var application = (TApplication)candidate;
             var entity = (OpenIddictStoreApplication)(object)application;
+
+            if (!returned.Add(entity.Id!))
+            {
+                continue;
+            }
 
             var values = valueColumn == "Uri"
                 ? OpenIddictStoreJson.DeserializeStrings(

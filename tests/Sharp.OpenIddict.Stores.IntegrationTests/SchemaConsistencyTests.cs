@@ -329,8 +329,12 @@ public sealed class SchemaConsistencyTests
                     continue;
                 }
 
+                // Oracle has no bare-NULL inline constraint (ORA-00922), so its nullable columns carry no
+                // marker at all: nullability is the default there. A missing marker therefore parses as
+                // nullable, and NullabilityMatchesTheDesign holds the template to the design either way -
+                // a dropped NOT NULL would parse as nullable and fail against the design model.
                 var column = Regex.Match(line,
-                    @"^[`""\[]?(?<name>\w+)[`""\]]?\s+(?<type>.+?)\s+(?<nullability>NOT NULL|NULL)\s*$");
+                    @"^[`""\[]?(?<name>\w+)[`""\]]?\s+(?<type>.+?)\s*(?<nullability>NOT NULL|NULL)?\s*$");
                 if (!column.Success)
                 {
                     continue;
@@ -339,7 +343,8 @@ public sealed class SchemaConsistencyTests
                 columns.Add(new Column(
                     column.Groups["name"].Value,
                     column.Groups["type"].Value.Trim(),
-                    Nullable: column.Groups["nullability"].Value == "NULL",
+                    Nullable: !column.Groups["nullability"].Success
+                        || column.Groups["nullability"].Value == "NULL",
                     Collated: column.Groups["type"].Value.Contains("COLLATE", StringComparison.OrdinalIgnoreCase)));
             }
 
