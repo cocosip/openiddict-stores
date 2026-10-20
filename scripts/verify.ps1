@@ -63,10 +63,9 @@ try {
         dotnet build $solution -c Release --no-incremental
     }
 
-    Invoke-Step 'Tests (unit + integration; SQLite runs, server suites skip)' {
-        dotnet test $solution -c Release --no-build
-    }
-
+    # Pack before testing: the package asset tests read artifacts/ during the test run, so on a clean
+    # checkout (or after any packaging change) the tests must see the packages built from this exact tree.
+    # The old order - tests first, pack after - fed the tests whatever stale nupkgs happened to be present.
     if (-not $SkipPack) {
         Invoke-Step 'Pack (eight packages, local verification only)' {
             if (Test-Path $artifacts) {
@@ -88,6 +87,10 @@ try {
             Write-Host "  $($packages.Count) packages packed."
             $packages | ForEach-Object { Write-Host "    $($_.Name)" }
         }
+    }
+
+    Invoke-Step 'Tests (unit + integration; SQLite runs, server suites skip)' {
+        dotnet test $solution -c Release --no-build
     }
 
     Write-Host ''
