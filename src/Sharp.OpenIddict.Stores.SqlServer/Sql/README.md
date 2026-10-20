@@ -1,6 +1,6 @@
 # SQL Server deployment script (Series 1 / v0001)
 
-The shipped file is `7/install/v0001.sql.template`. It is a **template, not a runnable script**: the table
+The shipped file is `1/install/v0001.sql.template`. It is a **template, not a runnable script**: the table
 prefix and the schema are configurable, so the copy that reaches the database must be rendered first with the
 same values the application configures through `SetTablePrefix`/`SetSchema`. Executing the template as-is
 fails, because `__PREFIX__` is not a table name.
@@ -8,7 +8,7 @@ fails, because `__PREFIX__` is not a table name.
 ## Rendering the deployment copy
 
 ```csharp
-var template = File.ReadAllText("sql/7/install/v0001.sql.template");
+var template = File.ReadAllText("sql/1/install/v0001.sql.template");
 var sql = OpenIddictStoreIdentifiers.RenderDeploymentScript(
     template, OpenIddictStoreSqlServerDialect.Instance, prefix: "Oidc", schema: "auth");
 ```
@@ -31,7 +31,7 @@ schema throws before a copy is produced. The schema must already exist; the scri
 1. Back up the target database.
 2. Stop all application instances that write to the schema.
 3. Create the dedicated schema if one is configured (the script does not create it).
-4. Render the deployment copy from `7/install/v0001.sql.template` (see above) with the configured prefix and schema.
+4. Render the deployment copy from `1/install/v0001.sql.template` (see above) with the configured prefix and schema.
 5. Execute the rendered copy. The script is a single batch with no `GO` separator, so `sqlcmd -i`, SSMS, or an ADO.NET command loop can all run it unchanged.
 6. Verify that `{prefix}SchemaVersions` contains exactly one row with `Series = N'1'` and `Version = 1`.
 

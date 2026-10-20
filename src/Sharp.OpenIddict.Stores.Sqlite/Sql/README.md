@@ -1,6 +1,6 @@
 # SQLite deployment script (Series 1 / v0001)
 
-The shipped file is `7/install/v0001.sql.template`. It is a **template, not a runnable script**: the table
+The shipped file is `1/install/v0001.sql.template`. It is a **template, not a runnable script**: the table
 prefix is configurable, so the copy that reaches the database must be rendered first with the same prefix the
 application configures through `SetTablePrefix`. Executing the template as-is fails, because `__PREFIX__` is
 not a table name.
@@ -10,7 +10,7 @@ not a table name.
 Use the library entry point so the copy matches the runtime configuration exactly:
 
 ```csharp
-var template = File.ReadAllText("sql/7/install/v0001.sql.template");
+var template = File.ReadAllText("sql/1/install/v0001.sql.template");
 var sql = OpenIddictStoreIdentifiers.RenderDeploymentScript(
     template, OpenIddictStoreSqliteDialect.Instance, prefix: "Oidc");
 ```
@@ -34,7 +34,7 @@ template.
 
 1. Back up the target database file (SQLite is a single file, so a plain copy is enough).
 2. Stop all writing processes; SQLite does not support rolling upgrades with multiple writers.
-3. Render the deployment copy from `7/install/v0001.sql.template` (see above) with the configured prefix.
+3. Render the deployment copy from `1/install/v0001.sql.template` (see above) with the configured prefix.
 4. Execute the rendered copy with a SQLite client in a single transaction; the script itself contains `BEGIN TRANSACTION` / `COMMIT`.
 5. Verify that `{prefix}SchemaVersions` contains exactly one row with `Series='1'` and `Version=1`.
 

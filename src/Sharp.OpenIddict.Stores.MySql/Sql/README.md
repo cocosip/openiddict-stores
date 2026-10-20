@@ -1,6 +1,6 @@
 # MySQL / MariaDB deployment script (Series 1 / v0001)
 
-The shipped file is `7/install/v0001.sql.template`. It is a **template, not a runnable script**: the table
+The shipped file is `1/install/v0001.sql.template`. It is a **template, not a runnable script**: the table
 prefix is configurable, so the copy that reaches the database must be rendered first with the same value the
 application configures through `SetTablePrefix`. Executing the template as-is fails, because `__PREFIX__` is
 not a table name.
@@ -12,7 +12,7 @@ pointing at the same file, and **the two are accepted separately**: a MySQL run 
 ## Rendering the deployment copy
 
 ```csharp
-var template = File.ReadAllText("sql/7/install/v0001.sql.template");
+var template = File.ReadAllText("sql/1/install/v0001.sql.template");
 var sql = OpenIddictStoreIdentifiers.RenderDeploymentScript(
     template, OpenIddictStoreMySqlDialect.Instance, prefix: "Oidc");
 ```
@@ -34,7 +34,7 @@ semantics, and `SetSchema` is rejected by the options validator rather than sile
 
 1. Back up the target database.
 2. Stop all application instances that write to it.
-3. Render the deployment copy from `7/install/v0001.sql.template` with the configured prefix.
+3. Render the deployment copy from `1/install/v0001.sql.template` with the configured prefix.
 4. Execute the rendered copy. It contains no `DELIMITER` block and no stored programs, so it can run through
    the `mysql` client with `--show-warnings --batch`, a migration runner, or an ADO.NET command loop that
    splits on `;`. Stop on the first error; do not continue past it.

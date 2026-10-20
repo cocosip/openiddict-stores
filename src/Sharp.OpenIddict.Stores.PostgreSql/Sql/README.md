@@ -1,6 +1,6 @@
 # PostgreSQL deployment script (Series 1 / v0001)
 
-The shipped file is `7/install/v0001.sql.template`. It is a **template, not a runnable script**: the table
+The shipped file is `1/install/v0001.sql.template`. It is a **template, not a runnable script**: the table
 prefix and the schema are configurable, so the copy that reaches the database must be rendered first with the
 same values the application configures through `SetTablePrefix`/`SetSchema`. Executing the template as-is
 fails, because `__PREFIX__` is not a table name.
@@ -8,7 +8,7 @@ fails, because `__PREFIX__` is not a table name.
 ## Rendering the deployment copy
 
 ```csharp
-var template = File.ReadAllText("sql/7/install/v0001.sql.template");
+var template = File.ReadAllText("sql/1/install/v0001.sql.template");
 var sql = OpenIddictStoreIdentifiers.RenderDeploymentScript(
     template, OpenIddictStorePostgreSqlDialect.Instance, prefix: "Oidc", schema: "auth");
 ```
@@ -31,7 +31,7 @@ schema throws before a copy is produced. The schema must already exist; the scri
 1. Back up the target database.
 2. Stop all application instances that write to the schema.
 3. Create the dedicated schema if one is configured (the script does not create it).
-4. Render the deployment copy from `7/install/v0001.sql.template` (see above) with the configured prefix and schema.
+4. Render the deployment copy from `1/install/v0001.sql.template` (see above) with the configured prefix and schema.
 5. Execute the rendered copy. It contains an explicit `BEGIN`/`COMMIT` pair and no `$$` blocks, so it can run through `psql -f`, a migration runner, or an ADO.NET command loop that splits on `;`.
 6. Verify that `{prefix}SchemaVersions` contains exactly one row with `Series = '1'` and `Version = 1`.
 
@@ -64,6 +64,13 @@ accidental re-run on a populated schema is refused.
 ## Verification status
 
 The template, rendering rules, paging, date binding, and identifier limits are covered by unit tests
-(`PostgreSqlDialectTests`) that do not need a server. **Real-database installation has not been executed in
-this repository** (see `docs/development.md`, E-028): the acceptance suite is expected to be run against a
-user-provided PostgreSQL instance before this provider is declared supported.
+(`PostgreSqlDialectTests`) that do not need a server.
+
+**Accepted on a user-provided server (2026-10-20, see `docs/development.md`, E-044):** the full 15-fact
+acceptance suite (`tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests/PostgreSqlStoreContractTests`) passed
+on PostgreSQL (server version verified 14+ by the suite itself, on net8.0/net9.0/net10.0 hosts): install
+script, re-run refusal, Unicode and 50 000-character values, microsecond `timestamp(6)` round-trips,
+`COLLATE "C"` exact comparison including case, accents, and trailing spaces, the unique keys treating NULLs
+as distinct, CAS updates, `LIMIT`/`OFFSET` paging including an offset without a count, associated deletes,
+bulk revocation with a NULL status, and prune. Per the E-028 rule this evidence comes from a server the user
+provided and must be re-earned on every schema series bump; it is never carried over.

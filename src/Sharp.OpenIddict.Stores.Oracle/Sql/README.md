@@ -1,6 +1,6 @@
 # Oracle deployment script (Series 1 / v0001)
 
-The shipped file is `7/install/v0001.sql.template`. It is a **template, not a runnable script**: the table
+The shipped file is `1/install/v0001.sql.template`. It is a **template, not a runnable script**: the table
 prefix and the schema are configurable, so the copy that reaches the database must be rendered first with the
 same values the application configures through `SetTablePrefix`/`SetSchema`. Executing the template as-is fails,
 because `__PREFIX__` is not a table name.
@@ -8,7 +8,7 @@ because `__PREFIX__` is not a table name.
 ## Rendering the deployment copy
 
 ```csharp
-var template = File.ReadAllText("sql/7/install/v0001.sql.template");
+var template = File.ReadAllText("sql/1/install/v0001.sql.template");
 var sql = OpenIddictStoreIdentifiers.RenderDeploymentScript(
     template, OpenIddictStoreOracleDialect.Instance, prefix: "Oidc", schema: "OIDC");
 ```
@@ -33,11 +33,11 @@ schema throws before a copy is produced. The schema must already exist and the c
 1. Back up the target schema.
 2. Stop all application instances that write to it.
 3. Create the schema and grant quota if it does not exist (the script does not create it).
-4. Render the deployment copy from `7/install/v0001.sql.template` with the configured prefix and schema.
+4. Render the deployment copy from `1/install/v0001.sql.template` with the configured prefix and schema.
 5. Execute the rendered copy. There is **no `/` terminator and no `GO`**: every statement ends with a
-   semicolon, so SQL*Plus/SQLcl with `SET SQLBLANKLINES ON`, a migration tool, or an ADO.NET loop that splits
-   on `;` all work. Do not paste it into SQL*Plus expecting `/` separators; those are client conventions, not
-   part of the script (design 10.3).
+   semicolon, so SQL*Plus/SQLcl with `SET SQLBLANKLINES ON` or a migration tool can run it as written. An
+   ADO.NET loop that splits on `;` must strip the trailing semicolon before executing: the terminator is a
+   client convention, and ODP.NET rejects it inside the statement text (design 10.3).
 6. Verify that `{prefix}SchemaVersions` contains exactly one row with `Series = '1'` and `Version = 1`.
 
 ## Transactions and failure recovery
@@ -77,7 +77,16 @@ around, because promising atomicity would be false (design 17).
 The template, rendering rules, paging, `NLSSORT` predicates, date binding, and identifier limits are covered by
 unit tests that do not need a server. Offline command tests also verify `:name` placeholders and enable
 `BindByName` on the actual driver command, so parameter order and repeated references use names.
-**Real-database installation has not been executed in this repository**
-(see `docs/development.md`, E-028): the acceptance suite, including the named-binding, `NCLOB`, `RAW(32)`,
-empty-string/NULL, and cancellation checks in BASE-03, is expected to run against a user-provided Oracle 19c
-instance before this provider is declared supported.
+
+**Accepted on a user-provided server (2026-10-20, see `docs/development.md`, E-044):** the full 15-fact
+acceptance suite (`tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests/OracleStoreContractTests`) passed
+against a SID-target Oracle instance on a net8.0 host: install script, re-run refusal, Unicode and
+50 000-character `NCLOB` values, microsecond `TIMESTAMP` round-trips with the UTC kind restored on read,
+`NLSSORT(BINARY)` exact comparison including case, accents, and trailing spaces, the unique keys treating
+NULLs as distinct, CAS updates, `OFFSET`/`FETCH NEXT` paging including an offset without a count, associated
+deletes, bulk revocation with a NULL status, and prune. The run exposed and this series fixes two defects:
+the template carried inline `NULL` markers, which Oracle rejects outright (ORA-00922) — nullable columns now
+carry no marker, which is the Oracle default — and the shared runtime SQL used `AS` table/view aliases and
+`SELECT DISTINCT` over LOB-bearing tables (ORA-00907/00932), which Oracle does not accept. Per the E-028
+rule this evidence comes from a server the user provided and must be re-earned on every schema series bump;
+it is never carried over.

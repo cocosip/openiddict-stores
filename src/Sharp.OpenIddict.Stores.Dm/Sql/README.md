@@ -1,6 +1,6 @@
 # Dameng DM8 deployment scripts (Series 1 / v0001) — one entry per compatibility mode
 
-The shipped files are `7/install/<mode>/v0001.sql.template`, one per declared compatibility mode. Each is a
+The shipped files are `1/install/<mode>/v0001.sql.template`, one per declared compatibility mode. Each is a
 **template, not a runnable script**: the table prefix and the schema are configurable, so the copy that reaches
 the database must be rendered first with the same values the application configures through
 `SetTablePrefix`/`SetSchema`.
@@ -14,9 +14,9 @@ entry, its own script file, and its own acceptance run** (design 5, 10.1).
 
 | Entry (`server` field) | `COMPATIBLE_MODE` | Runtime paging | Empty string | Script |
 | --- | --- | --- | --- | --- |
-| `DM8 (native mode)` | `0` | `LIMIT [count] [OFFSET n]` | unverified; stores unaffected | `7/install/native/v0001.sql.template` |
-| `DM8 (Oracle-compatible mode)` | `2` | `OFFSET n ROWS / FETCH NEXT m ROWS ONLY` | stored as NULL | `7/install/oracle-compatible/v0001.sql.template` |
-| `DM8 (MySQL-compatible mode)` | `4` | `LIMIT [count] [OFFSET n]` | distinct from NULL | `7/install/mysql-compatible/v0001.sql.template` |
+| `DM8 (native mode)` | `0` | `LIMIT [count] [OFFSET n]` | unverified; stores unaffected | `1/install/native/v0001.sql.template` |
+| `DM8 (Oracle-compatible mode)` | `2` | `OFFSET n ROWS / FETCH NEXT m ROWS ONLY` | stored as NULL | `1/install/oracle-compatible/v0001.sql.template` |
+| `DM8 (MySQL-compatible mode)` | `4` | `LIMIT [count] [OFFSET n]` | distinct from NULL | `1/install/mysql-compatible/v0001.sql.template` |
 
 `OpenIddictStoreDmCompatibilityMode` (and the `UseDm(mode)` registration) selects the matching dialect, and
 each dialect records its mode in its `CompatibilityMode` constant. A unit test pins the manifest to exactly
@@ -32,17 +32,21 @@ needs its own entry, its own script if the syntax differs, and its own full acce
 
 ## One prerequisite in every mode: CASE_SENSITIVE
 
-Exact comparison emits a plain equality. DM8 compares strings case-sensitively only on an instance
-initialized with the default `CASE_SENSITIVE=1`; an instance created with `CASE_SENSITIVE=0` folds case in
-comparisons and silently corrupts `FindByClientId`/`FindByName`/`FindByReferenceId`/`FindBySubject` lookups.
-No compatibility mode overrides that setting, so **the deployment must run on a `CASE_SENSITIVE=1`
-instance** — MySQL-compatible migrations in particular are often initialized with `0`, which is not a
-supported configuration of this provider.
+Exact comparison emits a plain equality plus a `CHAR_LENGTH` guard (see the blockers section). DM8 compares
+strings case-sensitively only on an instance initialized with the default `CASE_SENSITIVE=1`; an instance
+created with `CASE_SENSITIVE=0` folds case in comparisons and silently corrupts
+`FindByClientId`/`FindByName`/`FindByReferenceId`/`FindBySubject` lookups. No compatibility mode overrides
+that setting, so **the deployment must run on a `CASE_SENSITIVE=1` instance** — MySQL-compatible migrations
+in particular are often initialized with `0`, which is not a supported configuration of this provider.
+
+`CASE_SENSITIVE` is fixed at database-creation time and is not exposed through `v$dm_ini`; the acceptance
+suite therefore probes the behaviour directly (store `abc`, look up `ABC`, expect no row) rather than reading
+a flag. The probes on the accepted instances returned no row, so both behave case-sensitively.
 
 ## Rendering the deployment copy
 
 ```csharp
-var template = File.ReadAllText("sql/7/install/native/v0001.sql.template");
+var template = File.ReadAllText("sql/1/install/native/v0001.sql.template");
 var sql = OpenIddictStoreIdentifiers.RenderDeploymentScript(
     template, OpenIddictStoreDmDialect.Instance, prefix: "Oidc", schema: "OIDC");
 ```
@@ -82,7 +86,8 @@ neither the selected application dialect nor a server compatibility mode implies
 4. Create the schema if needed.
 5. Render that mode's template with the configured prefix and schema.
 6. Execute the rendered copy. No `/`, no `GO`, no PL/SQL block: every statement ends with a semicolon, so
-   DISQL, a migration manager, or an ADO.NET loop that splits on `;` all work.
+   DISQL or a migration manager can run it as written; an ADO.NET loop that splits on `;` should strip the
+   trailing terminator first, because the semicolon is a client convention, not part of the SQL.
 7. Verify that `{prefix}SchemaVersions` contains exactly one row with `Series = '1'` and `Version = 1`
    (the script inserts it; this step only confirms it landed).
 
@@ -98,17 +103,18 @@ A failure part-way leaves the objects already created in place.
 
 ## Known limitations and open blockers
 
-Mode-dependent behaviours are **release blockers** rather than satisfied requirements. They are listed here
-instead of being guessed at, because a wrong guess fails silently:
+Two mode-dependent behaviours were **release blockers**; both are now closed for native and Oracle-compatible
+mode by the 2026-10-20 acceptance run (E-044), and stay open only for MySQL-compatible mode until that mode
+gets its own run:
 
-- **Exact string comparison (design 16.1.1).** A real server in each declared mode must prove that `client`,
-  `Client`, `client `, and an accented variant are mutually distinct in `FindByClientId`, `FindByName`,
-  `FindByReferenceId`, `FindBySubject`, the CAS predicates, and the bulk revoke filters. If a mode turns out
-  to compare case-insensitively even under `CASE_SENSITIVE=1`, the fix belongs in that mode's dialect
-  predicate, not in the stores.
-- **Paging clause per mode.** Native and MySQL-compatible use `LIMIT ... OFFSET`, Oracle-compatible uses
-  `OFFSET ... ROWS / FETCH NEXT ... ROWS ONLY`. A real server in each mode must confirm its declared form is
-  accepted, including the no-count, offset-only, and zero-count shapes.
+- **Exact string comparison (design 16.1.1) — closed for native and Oracle-compatible.** The run proved case
+  and accent significance on both instances, and it surfaced one genuine defect: DM8 compares strings
+  blank-padded, so `client` and `client ` compared equal. The dialects now guard every exact comparison with
+  `CHAR_LENGTH` (a character count, so the guard cannot depend on either side's character set), and the
+  trailing-space variant is rejected on both real instances.
+- **Paging clause per mode — closed for native and Oracle-compatible.** Native's `LIMIT [count] [OFFSET n]`
+  and Oracle-compatible's `OFFSET n ROWS / FETCH NEXT m ROWS ONLY` were both accepted by real servers,
+  including the offset-without-count shape. MySQL-compatible still needs its own run.
 
 Further limitations:
 
@@ -124,6 +130,17 @@ Further limitations:
 ## Verification status
 
 The templates, rendering rules, paging shapes per mode, date binding, and identifier limits are covered by
-unit tests that do not need a server. **Nothing here has been executed against a real DM8 instance in any
-mode** (see `docs/development.md`, E-028), and the blockers above must be closed per mode before that mode is
-declared supported. The driver has no `net10` asset, so that acceptance must run on a net8.0/net9.0 host.
+unit tests that do not need a server.
+
+**Accepted on user-provided servers (2026-10-20, see `docs/development.md`, E-044):** the full 15-fact
+acceptance suite ran on real DM8 instances — `DmNativeStoreContractTests` against a `COMPATIBLE_MODE=0`
+instance and `DmOracleCompatibleStoreContractTests` against a `COMPATIBLE_MODE=2` instance, both on a net8.0
+host — and each passed 15/15: install script (into the dedicated schema), re-run refusal, Unicode and
+50 000-character `CLOB` values, microsecond `timestamp` round-trips, exact comparison including the
+trailing-space guard, the unique keys treating NULLs as distinct, CAS updates, the mode's paging clause,
+associated deletes, bulk revocation with a NULL status, and prune. The run also exposed and this series fixes
+the templates' inline `NULL` markers, which DM8 rejects just as Oracle does (nullable columns now carry no
+marker). The MySQL-compatible mode remains unaccepted: it has no run, and the two blockers above stay open
+for it. The driver has no `net10` asset, so the acceptance ran on a net8.0 host, and a net10 host refuses
+these suites outright. Per the E-028 rule the evidence comes from servers the user provided and must be
+re-earned on every schema series bump.
