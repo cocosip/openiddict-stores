@@ -50,7 +50,8 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
     {
         if (scope is not OpenIddictStoreScope entity)
         {
-            throw new ArgumentNullException(nameof(scope));
+            throw new ArgumentException(
+                $"The entity must be {nameof(OpenIddictStoreScope)} or a derived type.", nameof(scope));
         }
 
         if (string.IsNullOrEmpty(entity.Id))
@@ -95,7 +96,8 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
     {
         if (scope is not OpenIddictStoreScope entity)
         {
-            throw new ArgumentNullException(nameof(scope));
+            throw new ArgumentException(
+                $"The entity must be {nameof(OpenIddictStoreScope)} or a derived type.", nameof(scope));
         }
 
         if (string.IsNullOrEmpty(entity.Id))
@@ -168,19 +170,22 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
 
         await using var session = await CreateSessionAsync(cancellationToken).ConfigureAwait(false);
 
-        // Parameterized IN with exact equality matching; the number of names is protected by the dialect parameter limit.
+        // Exact membership: one dialect predicate per name, ORed together — the same rule FindByNameAsync
+        // follows. A native IN would use the column collation, which is case-insensitive by default on SQL
+        // Server, so a name list could match scopes whose name differs in case (design 16.1.1). The number
+        // of names is protected by the dialect parameter limit.
         var distinct = names.Distinct(StringComparer.Ordinal).ToList();
         var parameters = new Dictionary<string, object?>();
-        var placeholders = new List<string>(distinct.Count);
+        var conditions = new List<string>(distinct.Count);
 
         for (var index = 0; index < distinct.Count; index++)
         {
             var parameter = "name" + index.ToString(CultureInfo.InvariantCulture);
-            placeholders.Add(Parameter(parameter));
+            conditions.Add(Dialect.BuildExactStringEquals(Column("Name"), parameter));
             parameters[parameter] = distinct[index];
         }
 
-        var sql = $"SELECT * FROM {Table(Schema.Scopes)} WHERE {Column("Name")} IN ({string.Join(", ", placeholders)})";
+        var sql = $"SELECT * FROM {Table(Schema.Scopes)} WHERE ({string.Join(" OR ", conditions)})";
 
         await foreach (var row in session.StreamAsync(sql, parameters, MapEntity, cancellationToken)
             .ConfigureAwait(false))
@@ -367,7 +372,8 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
     {
         if (scope is not OpenIddictStoreScope entity)
         {
-            throw new ArgumentNullException(nameof(scope));
+            throw new ArgumentException(
+                $"The entity must be {nameof(OpenIddictStoreScope)} or a derived type.", nameof(scope));
         }
 
         if (string.IsNullOrEmpty(entity.Id))

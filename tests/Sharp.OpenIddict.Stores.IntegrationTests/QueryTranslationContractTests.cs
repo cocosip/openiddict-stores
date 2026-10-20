@@ -372,6 +372,48 @@ public sealed class QueryTranslationContractTests : IAsyncLifetime
         Assert.Equal(["b"], paged);
     }
 
+    [Fact]
+    public async Task Where_AfterTake_FiltersTheLimitedRows()
+    {
+        await CreateAsync("a", status: "valid");
+        await CreateAsync("b", status: "revoked");
+        await CreateAsync("c", status: "valid");
+
+        // The Where applies to the already limited sequence: of the first two rows only "a" is valid.
+        Assert.Equal(1L, await _tokens.CountAsync<OpenIddictStoreToken>(
+            query => query.OrderBy(token => token.Subject).Take(2)
+                .Where(token => token.Status == "valid"), default));
+    }
+
+    [Fact]
+    public async Task Ordering_AfterTake_IsRejected()
+    {
+        await CreateAsync("a");
+        await CreateAsync("b");
+
+        // SQL applies its ORDER BY before the limit; sinking this ordering into one statement would
+        // change both the order and which rows are selected, so it must be rejected, not approximated.
+        await Assert.ThrowsAsync<NotSupportedException>(
+            () => _tokens.CountAsync<OpenIddictStoreToken>(
+                query => query.Take(2).OrderBy(token => token.Subject), default).AsTask());
+
+        await Assert.ThrowsAsync<NotSupportedException>(
+            () => _tokens.CountAsync<OpenIddictStoreToken>(
+                query => query.Take(2).OrderByDescending(token => token.Subject), default).AsTask());
+    }
+
+    [Fact]
+    public async Task Skip_AfterTake_IsRejected()
+    {
+        await CreateAsync("a");
+        await CreateAsync("b");
+
+        // Take(2).Skip(1) means the second row of the limited set; one SQL OFFSET would read past it.
+        await Assert.ThrowsAsync<NotSupportedException>(
+            () => _tokens.CountAsync<OpenIddictStoreToken>(
+                query => query.Take(2).Skip(1), default).AsTask());
+    }
+
     private async Task<string> CreateAsync(
         string? subject,
         string? status = null,

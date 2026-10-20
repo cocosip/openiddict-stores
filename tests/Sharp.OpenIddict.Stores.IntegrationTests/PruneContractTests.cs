@@ -187,8 +187,11 @@ public sealed class PruneContractTests : IAsyncLifetime
     [Fact]
     public async Task Token_ThatIsAlreadyExpiredIsPruned()
     {
-        var expired = await CreateTokenAsync("valid", Old, expirationDate: Now.AddDays(-1));
-        var live = await CreateTokenAsync("valid", Old, expirationDate: Now.AddDays(1));
+        // The expiry branch compares against the store's internal UTC now (one clock for the whole
+        // call, by design), so the fixtures must be relative to the real clock, not the fixed
+        // scenario date the threshold uses — otherwise the "live" token expires with calendar time.
+        var expired = await CreateTokenAsync("valid", Old, expirationDate: DateTimeOffset.UtcNow.AddDays(-1));
+        var live = await CreateTokenAsync("valid", Old, expirationDate: DateTimeOffset.UtcNow.AddDays(1));
 
         Assert.Equal(1L, await _tokens.PruneAsync(Now, default));
 

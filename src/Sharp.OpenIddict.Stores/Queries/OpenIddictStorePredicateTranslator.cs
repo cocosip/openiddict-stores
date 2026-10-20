@@ -95,11 +95,6 @@ internal sealed class OpenIddictStorePredicateTranslator
             return result ? "1 = 1" : "1 = 0";
         }
 
-        if (left.Kind == OperandKind.Column && right.Kind == OperandKind.Column)
-        {
-            return BuildEquality(binary, left, right, equal);
-        }
-
         if (left.Kind == OperandKind.Column || right.Kind == OperandKind.Column)
         {
             return BuildEquality(binary, left, right, equal);
@@ -132,68 +127,43 @@ internal sealed class OpenIddictStorePredicateTranslator
             return equal ? oneSided : $"NOT {Parenthesize(oneSided)}";
         }
 
-        // Render the other side once, with the representation the column needs: a date is formatted by the
-        // dialect, a bounded string stays a parameter for the exact predicate. Both branches reuse it, so the
-        // null test and the equality never disagree about the bound form.
-        var b = right.IsColumn ? right.Sql : BindOperandFor(left, right);
-        var bothNull = $"({a} IS NULL AND {b} IS NULL)";
-        var bothNotNullAndEqual = $"({a} IS NOT NULL AND {b} IS NOT NULL AND {BuildNonNullEqual(binary, left, right, b)})";
-        var predicate = $"({bothNull} OR {bothNotNullAndEqual})";
+        string predicate;
+
+        if (left.Column!.IsBoundedString)
+        {
+            // A bounded string must compare through the dialect's exact predicate, not a plain =: the
+            // column collation is case-insensitive by default on SQL Server and hand-created tables may
+            // not carry the shipped collation elsewhere (design 16.1.1). The exact predicate is only
+            // sound for non-null values, so the null branches stay plain IS NULL tests.
+            predicate = BuildBoundedStringEquality(left, right);
+        }
+        else
+        {
+            // Render the other side once, with the representation the column needs: a date is formatted by the
+            // dialect, anything else stays a parameter. Both branches reuse it, so the null test and the
+            // equality never disagree about the bound form.
+            var b = right.IsColumn ? right.Sql : BindOperandFor(left, right);
+            var bothNull = $"({a} IS NULL AND {b} IS NULL)";
+            var bothNotNullAndEqual = $"({a} IS NOT NULL AND {b} IS NOT NULL AND {BuildNonNullEqual(binary, left, right, b)})";
+            predicate = $"({bothNull} OR {bothNotNullAndEqual})";
+        }
 
         return equal ? predicate : $"NOT {Parenthesize(predicate)}";
     }
 
-    private string BuildNonNullEqual(BinaryExpression binary, Operand left, Operand right, string boundOther)
-    {
-        var column = left.Kind == OperandKind.Column ? left : right.Kind == OperandKind.Column ? right : null;
-
-        if (column is null)
-        {
-            throw Reject(binary, "equality requires at least one mapped column.");
-        }
-
-        var other = ReferenceEquals(column, left) ? right : left;
-        var resolved = column.Column!;
-
-        if (resolved.Kind == OpenIddictStoreColumnKind.Date || resolved.IsBoundedString)
-        {
-            // Both need the already rendered form: a date is dialect-formatted, and a bounded string is bound
-            // as a parameter so the dialect predicate stays exact (design 16.1.1).
-            return $"{column.Sql} = {boundOther}";
-        }
-
-        if (resolved.Kind is OpenIddictStoreColumnKind.LargeText or OpenIddictStoreColumnKind.Json)
-        {
-            throw Reject(binary,
-                $"column '{resolved.Property}' only supports null checks and projection (design 9.2).");
-        }
-
-        return $"{column.Sql} = {boundOther}";
-    }
-
     /// <summary>
-    /// Renders the non-column side of a comparison in the form the column needs. A bounded string is bound
-    /// as a plain parameter here; the exact predicate is applied by the caller.
+    /// The bounded-string form of the design 9.1 equality table: the null test compares the raw column
+    /// and parameter, and the non-null branch delegates to the dialect's exact predicate so case, accents,
+    /// and trailing spaces stay significant on every provider (design 16.1.1). The whole OR is wrapped in
+    /// one outer pair of parentheses so a leading NOT negates the complete predicate, never one branch.
     /// </summary>
-    private string BindOperandFor(Operand column, Operand other)
-        => column.Column?.Kind == OpenIddictStoreColumnKind.Date
-            ? FormatDateOperand(other)
-            : BindOperand(other);
-
-    private string BuildExactEquality(Operand column, Operand other)
+    private string BuildBoundedStringEquality(Operand column, Operand other)
     {
-        if (other.Kind == OperandKind.Column)
+        if (other.IsColumn)
         {
-            // Same-table column-to-column comparison is part of the supported set (design 9.1); it needs a
-            // column form of the exact predicate so both sides stay exact.
-            return _dialect.BuildExactStringColumnEquals(column.Sql, other.Sql);
-        }
-
-        if (other.Value is null)
-        {
-            // `column == null` never reaches the non-null branch, so this is a defensive rejection.
-            throw new NotSupportedException(
-                $"The bounded string column '{column.Column!.Property}' was compared with null in a non-null context.");
+            return $"(({column.Sql} IS NULL AND {other.Sql} IS NULL) OR " +
+                   $"({column.Sql} IS NOT NULL AND {other.Sql} IS NOT NULL AND " +
+                   $"{_dialect.BuildExactStringColumnEquals(column.Sql, other.Sql)}))";
         }
 
         if (other.Value is not string value)
@@ -205,8 +175,43 @@ internal sealed class OpenIddictStorePredicateTranslator
         var name = NextParameter();
         _parameters[name] = value;
 
-        return _dialect.BuildExactStringEquals(column.Sql, name);
+        var placeholder = _dialect.ParameterPrefix + name;
+
+        return $"(({column.Sql} IS NULL AND {placeholder} IS NULL) OR " +
+               $"({column.Sql} IS NOT NULL AND {placeholder} IS NOT NULL AND " +
+               $"{_dialect.BuildExactStringEquals(column.Sql, name)}))";
     }
+
+    private string BuildNonNullEqual(BinaryExpression binary, Operand left, Operand right, string boundOther)
+    {
+        var column = left.Kind == OperandKind.Column ? left : right.Kind == OperandKind.Column ? right : null;
+
+        if (column is null)
+        {
+            throw Reject(binary, "equality requires at least one mapped column.");
+        }
+
+        var resolved = column.Column!;
+
+        // Dates arrive already rendered by the dialect; bounded strings never reach here, because
+        // BuildEquality routes them through the exact predicate instead.
+        if (resolved.Kind is OpenIddictStoreColumnKind.LargeText or OpenIddictStoreColumnKind.Json)
+        {
+            throw Reject(binary,
+                $"column '{resolved.Property}' only supports null checks and projection (design 9.2).");
+        }
+
+        return $"{column.Sql} = {boundOther}";
+    }
+
+    /// <summary>
+    /// Renders the non-column side of a comparison in the form the column needs: a date is formatted by
+    /// the dialect, anything else is bound as a plain parameter.
+    /// </summary>
+    private string BindOperandFor(Operand column, Operand other)
+        => column.Column?.Kind == OpenIddictStoreColumnKind.Date
+            ? FormatDateOperand(other)
+            : BindOperand(other);
 
     private string TranslateComparison(BinaryExpression binary)
     {
@@ -363,8 +368,17 @@ internal sealed class OpenIddictStorePredicateTranslator
 
         foreach (var value in nonNull)
         {
+            // The collection can carry DateTime or DateTimeOffset elements; both are normalized the same way.
+            var date = value switch
+            {
+                DateTimeOffset offset => OpenIddictStoreJson.NormalizeUtc(offset),
+                DateTime time => OpenIddictStoreJson.NormalizeUtc(time),
+                _ => throw new NotSupportedException(
+                    $"The date column '{target.Column!.Property}' can only be compared with date values."),
+            };
+
             var name = NextParameter();
-            _parameters[name] = _dialect.FormatDate(OpenIddictStoreJson.NormalizeUtc((DateTimeOffset)value!));
+            _parameters[name] = _dialect.FormatDate(date);
             parts.Add($"{target.Sql} = {_dialect.ParameterPrefix}{name}");
         }
 
@@ -433,8 +447,9 @@ internal sealed class OpenIddictStorePredicateTranslator
         _ => throw new NotSupportedException($"The operator '{type}' is not supported."),
     };
 
-    private static bool IsEntityMember(MemberExpression member)
-        => member.Expression is not null && member.Expression.Type == member.Expression.Type;
+    /// <summary>True when the member is read on the queried entity itself; a closure member is not a column.</summary>
+    private bool IsEntityMember(MemberExpression member)
+        => member.Expression is not null && member.Expression.Type == _entityType;
 
     /// <summary>
     /// Recognises the collection Contains forms a callback can produce. Besides

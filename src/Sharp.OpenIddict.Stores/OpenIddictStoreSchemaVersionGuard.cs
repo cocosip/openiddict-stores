@@ -46,43 +46,36 @@ internal sealed class OpenIddictStoreSchemaVersionGuard
             return;
         }
 
-        var sql = $"SELECT {_dialect.QuoteIdentifier("Series")}, {_dialect.QuoteIdentifier("Version")} " +
-                  $"FROM {_schema.VersionsTableName(_dialect)}";
+        // The row is selected by series: a table may legitimately carry rows of several series once a
+        // second one ships, and matching an arbitrary row would misread an installed sibling series as
+        // this package's schema.
+        var selectRow = $"SELECT {_dialect.QuoteIdentifier("Series")}, {_dialect.QuoteIdentifier("Version")} " +
+                        $"FROM {_schema.VersionsTableName(_dialect)}";
 
-        (string Series, int Version)? row;
-
-        try
-        {
-            await using var session = await OpenIddictStoreSession
-                .CreateAsync(_connectionFactory, _dialect, _schema, _commandTimeout, cancellationToken)
-                .ConfigureAwait(false);
-
-            // The mapper returns a value type, so an absent row materializes as default and cannot be told
-            // apart from a real row; a nullable element makes "no row" observable.
-            row = await session.QuerySingleOrDefaultAsync<(string Series, int Version)?>(
-                    sql, null, ReadRow, cancellationToken).ConfigureAwait(false);
-        }
-        catch (DbException exception)
-        {
-            // A missing table surfaces as a provider error; it means the same thing as "not installed".
-            throw new OpenIddictStoreSchemaVersionException(MissingTableMessage(), exception);
-        }
+        var row = await ReadRowAsync(
+            $"{selectRow} WHERE {_dialect.QuoteIdentifier("Series")} = {_dialect.ParameterPrefix}requiredSeries",
+            new { requiredSeries = OpenIddictStoreSchema.RequiredSeries },
+            cancellationToken).ConfigureAwait(false);
 
         if (row is null)
         {
+            // No row for the required series. A different series may still be installed, so read whichever
+            // row exists to report the actual mismatch instead of a generic "not installed".
+            var installed = await ReadRowAsync(selectRow, null, cancellationToken).ConfigureAwait(false);
+
+            if (installed is not null)
+            {
+                throw new OpenIddictStoreSchemaVersionException(
+                    $"The installed schema belongs to series '{installed.Value.Series}' but this package requires series " +
+                    $"'{OpenIddictStoreSchema.RequiredSeries}'. {RequiredMessage()}");
+            }
+
             throw new OpenIddictStoreSchemaVersionException(
                 $"The schema version table {_schema.SchemaVersions} contains no row for series " +
                 $"'{OpenIddictStoreSchema.RequiredSeries}'. {RequiredMessage()}");
         }
 
         var (series, version) = row.Value;
-
-        if (!string.Equals(series, OpenIddictStoreSchema.RequiredSeries, StringComparison.Ordinal))
-        {
-            throw new OpenIddictStoreSchemaVersionException(
-                $"The installed schema belongs to series '{series}' but this package requires series " +
-                $"'{OpenIddictStoreSchema.RequiredSeries}'. {RequiredMessage()}");
-        }
 
         if (version != OpenIddictStoreSchema.RequiredVersion)
         {
@@ -92,6 +85,27 @@ internal sealed class OpenIddictStoreSchemaVersionGuard
         }
 
         Volatile.Write(ref _verified, 1);
+    }
+
+    private async ValueTask<(string Series, int Version)?> ReadRowAsync(
+        string sql, object? parameters, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var session = await OpenIddictStoreSession
+                .CreateAsync(_connectionFactory, _dialect, _schema, _commandTimeout, cancellationToken)
+                .ConfigureAwait(false);
+
+            // The mapper returns a value type, so an absent row materializes as default and cannot be told
+            // apart from a real row; a nullable element makes "no row" observable.
+            return await session.QuerySingleOrDefaultAsync<(string Series, int Version)?>(
+                sql, parameters, ReadRow, cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbException exception)
+        {
+            // A missing table surfaces as a provider error; it means the same thing as "not installed".
+            throw new OpenIddictStoreSchemaVersionException(MissingTableMessage(), exception);
+        }
     }
 
     private static (string Series, int Version)? ReadRow(DbDataReader reader) => (reader.GetString(0), reader.GetInt32(1));

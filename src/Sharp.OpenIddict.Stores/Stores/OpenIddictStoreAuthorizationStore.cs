@@ -51,7 +51,8 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
     {
         if (authorization is not OpenIddictStoreAuthorization entity)
         {
-            throw new ArgumentNullException(nameof(authorization));
+            throw new ArgumentException(
+                $"The entity must be {nameof(OpenIddictStoreAuthorization)} or a derived type.", nameof(authorization));
         }
 
         if (string.IsNullOrEmpty(entity.Id))
@@ -95,7 +96,8 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
     {
         if (authorization is not OpenIddictStoreAuthorization entity)
         {
-            throw new ArgumentNullException(nameof(authorization));
+            throw new ArgumentException(
+                $"The entity must be {nameof(OpenIddictStoreAuthorization)} or a derived type.", nameof(authorization));
         }
 
         if (string.IsNullOrEmpty(entity.Id))
@@ -448,19 +450,23 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
         // NULL counts as "not valid", so an authorization without a status is eligible.
         var notValid = Dialect.BuildExactStringNotEqualsIncludingNull("a." + Column("Status"), "valid");
 
+        // The paged candidate subselect is wrapped in a derived table before it reaches the IN list:
+        // MySQL rejects a LIMIT directly inside an IN subquery (error 1235), and the wrapper also
+        // materializes the self-reference so the same-table DELETE stays allowed (error 1093).
         return $@"
             DELETE FROM {authorizations}
             WHERE {Column("Id")} IN (
-                SELECT a.{Column("Id")} FROM {authorizations} a
-                WHERE a.{Column("CreationDate")} IS NOT NULL
-                  AND a.{Column("CreationDate")} < {Parameter("threshold")}
-                  AND ({notValid} OR {Dialect.BuildExactStringEquals("a." + Column("Type"), "adhoc")})
-                  AND NOT EXISTS (
-                        SELECT 1 FROM {tokens} t
-                        WHERE t.{Column("AuthorizationId")} = a.{Column("Id")})
-                ORDER BY a.{Column("Id")}
-                {Dialect.BuildPaging(PruneBatchSize, null)}
-            )";
+                SELECT {Column("Id")} FROM (
+                    SELECT a.{Column("Id")} FROM {authorizations} a
+                    WHERE a.{Column("CreationDate")} IS NOT NULL
+                      AND a.{Column("CreationDate")} < {Parameter("threshold")}
+                      AND ({notValid} OR {Dialect.BuildExactStringEquals("a." + Column("Type"), "adhoc")})
+                      AND NOT EXISTS (
+                            SELECT 1 FROM {tokens} t
+                            WHERE t.{Column("AuthorizationId")} = a.{Column("Id")})
+                    ORDER BY a.{Column("Id")}
+                    {Dialect.BuildPaging(PruneBatchSize, null)}
+                ) batched)";
     }
 
     /// <inheritdoc />
@@ -551,7 +557,8 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
     {
         if (authorization is not OpenIddictStoreAuthorization entity)
         {
-            throw new ArgumentNullException(nameof(authorization));
+            throw new ArgumentException(
+                $"The entity must be {nameof(OpenIddictStoreAuthorization)} or a derived type.", nameof(authorization));
         }
 
         if (string.IsNullOrEmpty(entity.Id))

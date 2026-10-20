@@ -104,6 +104,38 @@ public sealed class SchemaVersionContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ForeignSeriesRow_DoesNotMaskTheRequiredSeries()
+    {
+        await InstallAsync();
+
+        // A version table may carry rows of several series once a second one ships; the guard must
+        // read its own series' row instead of whichever row the engine happens to return first.
+        await ExecuteAsync(
+            "INSERT INTO OpenIddictSchemaVersions (Series, Version, UpdatedUtc) VALUES ('8', 1, '2026-10-20T00:00:00.000Z')");
+
+        var store = CreateStore();
+
+        Assert.Equal(0, await store.CountAsync(default));
+    }
+
+    [Fact]
+    public async Task ForeignSeriesOnly_IsRejectedWithTheInstalledSeries()
+    {
+        await InstallAsync();
+        await ExecuteAsync("DELETE FROM OpenIddictSchemaVersions WHERE Series = '1'");
+        await ExecuteAsync(
+            "INSERT INTO OpenIddictSchemaVersions (Series, Version, UpdatedUtc) VALUES ('8', 1, '2026-10-20T00:00:00.000Z')");
+
+        var store = CreateStore();
+
+        var exception = await Assert.ThrowsAsync<OpenIddictStoreSchemaVersionException>(
+            () => store.CountAsync(default).AsTask());
+
+        Assert.Contains("series '8'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("requires series '1'", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task MissingVersionRow_IsRejected()
     {
         await InstallAsync();

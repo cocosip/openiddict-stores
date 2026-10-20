@@ -128,7 +128,7 @@ internal sealed class OpenIddictStoreOptionsValidator : IValidateOptions<OpenIdd
         {
             failures.Add("The table prefix cannot be empty.");
         }
-        else if (!IsValidIdentifier(options.TablePrefix))
+        else if (!OpenIddictStoreIdentifiers.IsValid(options.TablePrefix))
         {
             failures.Add($"The table prefix '{options.TablePrefix}' is not a valid identifier fragment: only letters, digits, and underscores are allowed, and it cannot start with a digit.");
         }
@@ -147,31 +147,13 @@ internal sealed class OpenIddictStoreOptionsValidator : IValidateOptions<OpenIdd
             {
                 failures.Add("SQLite and MySQL do not support dedicated schema semantics; SetSchema cannot be configured.");
             }
-            else if (!IsValidIdentifier(schema))
+            else if (!OpenIddictStoreIdentifiers.IsValid(schema))
             {
                 failures.Add($"The schema '{schema}' is not a valid identifier.");
             }
         }
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
-    }
-
-    internal static bool IsValidIdentifier(string value)
-    {
-        if (value.Length == 0 || char.IsDigit(value[0]))
-        {
-            return false;
-        }
-
-        foreach (var character in value)
-        {
-            if (!char.IsLetterOrDigit(character) && character != '_')
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 }
 

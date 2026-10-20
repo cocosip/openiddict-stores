@@ -50,7 +50,8 @@ public class OpenIddictStoreTokenStore<TToken> : OpenIddictStoreBase, IOpenIddic
     {
         if (token is not OpenIddictStoreToken entity)
         {
-            throw new ArgumentNullException(nameof(token));
+            throw new ArgumentException(
+                $"The entity must be {nameof(OpenIddictStoreToken)} or a derived type.", nameof(token));
         }
 
         if (string.IsNullOrEmpty(entity.Id))
@@ -91,7 +92,8 @@ public class OpenIddictStoreTokenStore<TToken> : OpenIddictStoreBase, IOpenIddic
     {
         if (token is not OpenIddictStoreToken entity)
         {
-            throw new ArgumentNullException(nameof(token));
+            throw new ArgumentException(
+                $"The entity must be {nameof(OpenIddictStoreToken)} or a derived type.", nameof(token));
         }
 
         if (string.IsNullOrEmpty(entity.Id))
@@ -377,23 +379,27 @@ public class OpenIddictStoreTokenStore<TToken> : OpenIddictStoreBase, IOpenIddic
         var authorizationNotValid =
             Dialect.BuildExactStringNotEqualsIncludingNull("a." + Column("Status"), "valid");
 
+        // The paged candidate subselect is wrapped in a derived table before it reaches the IN list:
+        // MySQL rejects a LIMIT directly inside an IN subquery (error 1235), and the wrapper also
+        // materializes the self-reference so the same-table DELETE stays allowed (error 1093).
         return $@"
             DELETE FROM {tokens}
             WHERE {Column("Id")} IN (
-                SELECT t.{Column("Id")} FROM {tokens} t
-                WHERE t.{Column("CreationDate")} IS NOT NULL
-                  AND t.{Column("CreationDate")} < {Parameter("threshold")}
-                  AND (
-                        ({notInactive} AND {notValid})
-                     OR EXISTS (
-                            SELECT 1 FROM {authorizations} a
-                            WHERE a.{Column("Id")} = t.{Column("AuthorizationId")}
-                              AND {authorizationNotValid})
-                     OR (t.{Column("ExpirationDate")} IS NOT NULL AND t.{Column("ExpirationDate")} < {Parameter("now")})
-                  )
-                ORDER BY t.{Column("Id")}
-                {Dialect.BuildPaging(PruneBatchSize, null)}
-            )";
+                SELECT {Column("Id")} FROM (
+                    SELECT t.{Column("Id")} FROM {tokens} t
+                    WHERE t.{Column("CreationDate")} IS NOT NULL
+                      AND t.{Column("CreationDate")} < {Parameter("threshold")}
+                      AND (
+                            ({notInactive} AND {notValid})
+                         OR EXISTS (
+                                SELECT 1 FROM {authorizations} a
+                                WHERE a.{Column("Id")} = t.{Column("AuthorizationId")}
+                                  AND {authorizationNotValid})
+                         OR (t.{Column("ExpirationDate")} IS NOT NULL AND t.{Column("ExpirationDate")} < {Parameter("now")})
+                      )
+                    ORDER BY t.{Column("Id")}
+                    {Dialect.BuildPaging(PruneBatchSize, null)}
+                ) batched)";
     }
 
     /// <inheritdoc />
@@ -544,7 +550,8 @@ public class OpenIddictStoreTokenStore<TToken> : OpenIddictStoreBase, IOpenIddic
     {
         if (token is not OpenIddictStoreToken entity)
         {
-            throw new ArgumentNullException(nameof(token));
+            throw new ArgumentException(
+                $"The entity must be {nameof(OpenIddictStoreToken)} or a derived type.", nameof(token));
         }
 
         if (string.IsNullOrEmpty(entity.Id))

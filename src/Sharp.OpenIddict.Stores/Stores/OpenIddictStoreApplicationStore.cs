@@ -82,6 +82,10 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
 
         await using var session = await CreateSessionAsync(cancellationToken).ConfigureAwait(false);
 
+        // The main insert and both collection indexes commit together: a failure anywhere leaves no
+        // application row whose URI lookups would silently miss (design 7/16.2).
+        await using var transaction = await session.BeginAsync(cancellationToken).ConfigureAwait(false);
+
         var affected = await session.ExecuteAsync(
             $@"INSERT INTO {Table(Schema.Applications)} (
                 {Column("Id")}, {Column("ConcurrencyToken")}, {Column("ApplicationType")}, {Column("ClientId")},
@@ -95,15 +99,13 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
                 {Parameter("DisplayName")}, {Parameter("DisplayNames")}, {Parameter("JsonWebKeySet")},
                 {Parameter("Permissions")}, {Parameter("PostLogoutRedirectUris")}, {Parameter("Properties")},
                 {Parameter("RedirectUris")}, {Parameter("Requirements")}, {Parameter("Settings")})",
-            entity, cancellationToken).ConfigureAwait(false);
+            entity, transaction.Value, cancellationToken).ConfigureAwait(false);
 
         if (affected != 1)
         {
             throw new InvalidOperationException("Creating the Application wrote no rows.");
         }
 
-        // The collection auxiliary index shares the transaction with the main table (design 7/16.2).
-        await using var transaction = await session.BeginAsync(cancellationToken).ConfigureAwait(false);
         await ReplaceCollectionIndexAsync(
             session, transaction.Value, entity.Id!, Schema.ApplicationRedirectUris, "ApplicationId", "UriHash", "Uri",
             OpenIddictStoreJson.DeserializeStrings(entity.RedirectUris), cancellationToken).ConfigureAwait(false);
@@ -121,7 +123,8 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
     {
         if (application is not OpenIddictStoreApplication entity)
         {
-            throw new ArgumentNullException(nameof(application));
+            throw new ArgumentException(
+                $"The entity must be {nameof(OpenIddictStoreApplication)} or a derived type.", nameof(application));
         }
 
         if (string.IsNullOrEmpty(entity.Id))
@@ -511,7 +514,8 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
     {
         if (application is not OpenIddictStoreApplication entity)
         {
-            throw new ArgumentNullException(nameof(application));
+            throw new ArgumentException(
+                $"The entity must be {nameof(OpenIddictStoreApplication)} or a derived type.", nameof(application));
         }
 
         if (string.IsNullOrEmpty(entity.Id))

@@ -23,6 +23,9 @@ public abstract class OpenIddictStoreBase
     /// <summary>Lazily created so a store that is resolved but never used opens no connection.</summary>
     private OpenIddictStoreSchemaVersionGuard? _schemaVersion;
 
+    /// <summary>Cached on first use: the options are immutable after startup and every SQL build reads it.</summary>
+    private OpenIddictStoreSchema? _schema;
+
     /// <summary>Creates the store from its dependencies.</summary>
     protected OpenIddictStoreBase(
         IOptions<OpenIddictStoreOptions> options,
@@ -46,7 +49,7 @@ public abstract class OpenIddictStoreBase
     protected IOpenIddictStoreDialect Dialect => _dialect;
 
     /// <summary>Table names and schema.</summary>
-    internal OpenIddictStoreSchema Schema => new(Options.TablePrefix, Options.Schema);
+    internal OpenIddictStoreSchema Schema => _schema ??= new(Options.TablePrefix, Options.Schema);
 
     /// <summary>
     /// Creates a one-shot session (a new connection). The caller must dispose it. The schema version is
@@ -131,7 +134,9 @@ public abstract class OpenIddictStoreBase
     /// <param name="buildDelete">
     /// Builds the batch DELETE. It receives the parameter dictionary (already containing the
     /// threshold and batch size) and must add the full prune predicate itself, including the
-    /// NOT EXISTS guard, so a row that stopped qualifying is never removed.
+    /// NOT EXISTS guard, so a row that stopped qualifying is never removed. The paged candidate
+    /// subselect must be wrapped in a derived table before it reaches the IN list: MySQL rejects
+    /// a LIMIT directly inside an IN subquery, and the wrapper keeps the same-table DELETE legal.
     /// </param>
     /// <param name="threshold">The captured UTC threshold; rows at or after it are never pruned.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -345,14 +350,4 @@ public static class OpenIddictStoreErrors
             throw new ArgumentException("The specified key cannot be null or an empty string.", parameterName);
         }
     }
-
-    /// <summary>
-    /// Query callbacks are not implemented yet (the translator from design 9 is delivered by QUERY-01..03). This is rejected
-    /// explicitly: neither an approximate full-table load nor a default value pretending success may be returned.
-    /// </summary>
-    public static NotSupportedException QueryCallbacksNotImplemented()
-        => new("The IQueryable query callbacks of this store are not implemented yet (design 9, QUERY-01..03). " +
-               "Use the fixed lookup methods until then; this never degrades to in-memory full-table execution.");
-
-
 }

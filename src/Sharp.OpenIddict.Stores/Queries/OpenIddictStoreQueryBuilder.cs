@@ -58,7 +58,6 @@ internal sealed class OpenIddictStoreQueryBuilder<TEntity>
 
         var inner = new List<Step>();
         var outerPredicates = new List<string>();
-        var hasOuterProjection = false;
 
         for (var index = 0; index < steps.Count; index++)
         {
@@ -75,14 +74,27 @@ internal sealed class OpenIddictStoreQueryBuilder<TEntity>
                         "filter and order before projecting (design 9.2).");
                 }
 
-                hasOuterProjection = index > firstLimit && firstLimit >= 0;
                 continue;
             }
 
-            if (step.Kind == StepKind.Where && firstLimit >= 0 && index > firstLimit)
+            if (firstLimit >= 0 && index > firstLimit)
             {
-                outerPredicates.Add(translator.Translate(step.Predicate!));
-                continue;
+                if (step.Kind == StepKind.Where)
+                {
+                    outerPredicates.Add(translator.Translate(step.Predicate!));
+                    continue;
+                }
+
+                // An ordering or a Skip after a limit applies to the limited sequence: SQL applies its
+                // ORDER BY/OFFSET before the limit, so sinking it into the inner statement would change
+                // both the order and which rows are selected. Reject instead of approximating (design 9.2).
+                if (step.Kind is StepKind.OrderBy or StepKind.ThenBy or StepKind.Skip)
+                {
+                    throw new NotSupportedException(
+                        $"A {step.Kind} after a Skip/Take cannot be translated: it must apply to the already " +
+                        "limited sequence, but one SQL statement applies its ordering and offset before the " +
+                        "limit. Order and page before limiting, or query the limited page separately (design 9.2).");
+                }
             }
 
             inner.Add(step);
@@ -91,7 +103,7 @@ internal sealed class OpenIddictStoreQueryBuilder<TEntity>
         var parameters = new Dictionary<string, object?>(StringComparer.Ordinal);
         var select = BuildProjection(projection, translator);
 
-        var sql = BuildSql(table, inner, select, parameters, translator, hasOuterProjection, outerPredicates,
+        var sql = BuildSql(table, inner, select, parameters, translator, outerPredicates,
             forCount && firstLimit < 0);
 
         return new OpenIddictStoreQueryPlan(sql, parameters, select.Kind, _dialect);
@@ -103,7 +115,6 @@ internal sealed class OpenIddictStoreQueryBuilder<TEntity>
         Projection projection,
         Dictionary<string, object?> parameters,
         OpenIddictStorePredicateTranslator translator,
-        bool hasOuterProjection,
         List<string> outerPredicates,
         bool dropOrdering)
     {
