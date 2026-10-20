@@ -42,8 +42,10 @@ logs/
 # nuget包
 nupkgs/
 
-# tools
-tools/
+# tools (ignored except this repository's own SQL generator project)
+tools/*
+!tools/README.md
+!tools/Sharp.OpenIddict.Stores.SqlTool/
 
 *.secrets.json
 

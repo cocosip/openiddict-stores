@@ -18,4 +18,7 @@
     <Project Path="samples/Sharp.OpenIddict.Stores.Sample.Server/Sharp.OpenIddict.Stores.Sample.Server.csproj" />
     <Project Path="samples/Sharp.OpenIddict.Stores.Sample.Client/Sharp.OpenIddict.Stores.Sample.Client.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Sharp.OpenIddict.Stores.SqlTool/Sharp.OpenIddict.Stores.SqlTool.csproj" />
+  </Folder>
 </Solution>
