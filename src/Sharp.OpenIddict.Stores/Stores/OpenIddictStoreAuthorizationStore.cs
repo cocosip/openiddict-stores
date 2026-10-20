@@ -72,7 +72,9 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
                 {Column("Id")}, {Column("ConcurrencyToken")}, {Column("ApplicationId")}, {Column("CreationDate")},
                 {Column("Properties")}, {Column("Scopes")}, {Column("Status")}, {Column("Subject")}, {Column("Type")})
             VALUES (
-                @Id, @ConcurrencyToken, @ApplicationId, @CreationDate, @Properties, @Scopes, @Status, @Subject, @Type)",
+                {Parameter("Id")}, {Parameter("ConcurrencyToken")}, {Parameter("ApplicationId")}, {Parameter("CreationDate")},
+                {Parameter("Properties")}, {Parameter("Scopes")}, {Parameter("Status")}, {Parameter("Subject")},
+                {Parameter("Type")})",
             ToParameters(entity), transaction.Value, cancellationToken).ConfigureAwait(false);
 
         if (affected != 1)
@@ -108,7 +110,7 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
         // check and the delete cannot survive the cascade (design 16.2.1, LIFE-02).
         var locked = await session.ExecuteAsync(
             $"UPDATE {Table(Schema.Authorizations)} SET {Column("ConcurrencyToken")} = {Column("ConcurrencyToken")} " +
-            $"WHERE {Column("Id")} = @Id AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "ConcurrencyToken")}",
+            $"WHERE {Column("Id")} = {Parameter("Id")} AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "ConcurrencyToken")}",
             new { Id = entity.Id, ConcurrencyToken = entity.ConcurrencyToken },
             transaction.Value, cancellationToken).ConfigureAwait(false);
 
@@ -121,15 +123,15 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
         // that token has no ApplicationId or belongs to another application (design 16.2.1). The
         // authorizations those tokens also reference are kept.
         await session.ExecuteAsync(
-            $"DELETE FROM {Table(Schema.Tokens)} WHERE {Column("AuthorizationId")} = @Id",
+            $"DELETE FROM {Table(Schema.Tokens)} WHERE {Column("AuthorizationId")} = {Parameter("Id")}",
             new { Id = entity.Id }, transaction.Value, cancellationToken).ConfigureAwait(false);
 
         await session.ExecuteAsync(
-            $"DELETE FROM {Table(Schema.AuthorizationScopes)} WHERE {Column("AuthorizationId")} = @Id",
+            $"DELETE FROM {Table(Schema.AuthorizationScopes)} WHERE {Column("AuthorizationId")} = {Parameter("Id")}",
             new { Id = entity.Id }, transaction.Value, cancellationToken).ConfigureAwait(false);
 
         var affected = await session.ExecuteAsync(
-            $"DELETE FROM {Table(Schema.Authorizations)} WHERE {Column("Id")} = @Id " +
+            $"DELETE FROM {Table(Schema.Authorizations)} WHERE {Column("Id")} = {Parameter("Id")} " +
             $"AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "ConcurrencyToken")}",
             new { Id = entity.Id, ConcurrencyToken = entity.ConcurrencyToken },
             transaction.Value, cancellationToken).ConfigureAwait(false);
@@ -210,7 +212,7 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
             {
                 var name = "scope" + index.ToString(CultureInfo.InvariantCulture);
                 groupParameters[name] = OpenIddictStoreSession.Hash(group[index]);
-                placeholders.Add("@" + name);
+                placeholders.Add(Parameter(name));
             }
 
             var idSql = $@"
@@ -249,7 +251,7 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
             {
                 var name = "id" + index.ToString(CultureInfo.InvariantCulture);
                 groupParameters[name] = group[index];
-                placeholders.Add("@" + name);
+                placeholders.Add(Parameter(name));
             }
 
             var pageSql = $"SELECT * FROM {Table(Schema.Authorizations)} " +
@@ -451,7 +453,7 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
             WHERE {Column("Id")} IN (
                 SELECT a.{Column("Id")} FROM {authorizations} AS a
                 WHERE a.{Column("CreationDate")} IS NOT NULL
-                  AND a.{Column("CreationDate")} < @threshold
+                  AND a.{Column("CreationDate")} < {Parameter("threshold")}
                   AND ({notValid} OR {Dialect.BuildExactStringEquals("a." + Column("Type"), "adhoc")})
                   AND NOT EXISTS (
                         SELECT 1 FROM {tokens} AS t
@@ -569,15 +571,15 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
 
         var affected = await session.ExecuteAsync(
             $@"UPDATE {Table(Schema.Authorizations)} SET
-                {Column("ConcurrencyToken")} = @Updated,
-                {Column("ApplicationId")} = @ApplicationId,
-                {Column("CreationDate")} = @CreationDate,
-                {Column("Properties")} = @Properties,
-                {Column("Scopes")} = @Scopes,
-                {Column("Status")} = @Status,
-                {Column("Subject")} = @Subject,
-                {Column("Type")} = @Type
-            WHERE {Column("Id")} = @Id
+                {Column("ConcurrencyToken")} = {Parameter("Updated")},
+                {Column("ApplicationId")} = {Parameter("ApplicationId")},
+                {Column("CreationDate")} = {Parameter("CreationDate")},
+                {Column("Properties")} = {Parameter("Properties")},
+                {Column("Scopes")} = {Parameter("Scopes")},
+                {Column("Status")} = {Parameter("Status")},
+                {Column("Subject")} = {Parameter("Subject")},
+                {Column("Type")} = {Parameter("Type")}
+            WHERE {Column("Id")} = {Parameter("Id")}
               AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "Previous")}",
             parameters, transaction.Value, cancellationToken).ConfigureAwait(false);
 
@@ -693,7 +695,7 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
         ImmutableArray<string> scopes, CancellationToken cancellationToken)
     {
         await session.ExecuteAsync(
-            $"DELETE FROM {Table(Schema.AuthorizationScopes)} WHERE {Column("AuthorizationId")} = @authorizationId",
+            $"DELETE FROM {Table(Schema.AuthorizationScopes)} WHERE {Column("AuthorizationId")} = {Parameter("authorizationId")}",
             new { authorizationId }, transaction, cancellationToken).ConfigureAwait(false);
 
         if (scopes.IsDefaultOrEmpty)
@@ -710,7 +712,7 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
             await session.ExecuteAsync(
                 $@"INSERT INTO {Table(Schema.AuthorizationScopes)} (
                     {Column("AuthorizationId")}, {Column("ScopeHash")}, {Column("Scope")}, {Column("Position")})
-                   VALUES (@authorizationId, @hash, @value, @position)",
+                   VALUES ({Parameter("authorizationId")}, {Parameter("hash")}, {Parameter("value")}, {Parameter("position")})",
                 new
                 {
                     authorizationId,

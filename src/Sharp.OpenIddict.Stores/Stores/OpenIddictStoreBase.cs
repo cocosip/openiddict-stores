@@ -78,6 +78,9 @@ public abstract class OpenIddictStoreBase
     /// <summary>Quotes a column name.</summary>
     protected string Column(string name) => Dialect.QuoteIdentifier(name);
 
+    /// <summary>Builds a parameter placeholder using this store's dialect.</summary>
+    protected string Parameter(string name) => Dialect.ParameterPrefix + name;
+
     /// <summary>Logs the operation name and affected row count of a successful write, without business data.</summary>
     protected void LogWritten(string operation, int affected)
         => Logger.LogDebug("{Operation} completed with {Affected} rows affected.", operation, affected);
@@ -104,7 +107,7 @@ public abstract class OpenIddictStoreBase
         var predicate = conditions.Count == 0 ? string.Empty : " WHERE " + string.Join(" AND ", conditions);
 
         var sql = $"UPDATE {Table(table)} SET " +
-                  $"{Column("Status")} = @revoked, {Column("ConcurrencyToken")} = @rotated{predicate}";
+                  $"{Column("Status")} = {Parameter("revoked")}, {Column("ConcurrencyToken")} = {Parameter("rotated")}{predicate}";
 
         var arguments = new Dictionary<string, object?>(parameters, StringComparer.Ordinal)
         {

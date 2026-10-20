@@ -75,7 +75,9 @@ around, because promising atomicity would be false (design 17).
 ## Verification status
 
 The template, rendering rules, paging, `NLSSORT` predicates, date binding, and identifier limits are covered by
-unit tests that do not need a server. **Real-database installation has not been executed in this repository**
+unit tests that do not need a server. Offline command tests also verify `:name` placeholders and enable
+`BindByName` on the actual driver command, so parameter order and repeated references use names.
+**Real-database installation has not been executed in this repository**
 (see `docs/development.md`, E-028): the acceptance suite, including the named-binding, `NCLOB`, `RAW(32)`,
 empty-string/NULL, and cancellation checks in BASE-03, is expected to run against a user-provided Oracle 19c
 instance before this provider is declared supported.

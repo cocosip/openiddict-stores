@@ -19,6 +19,7 @@ namespace Sharp.OpenIddict.Stores;
 internal static class OpenIddictStoreCommands
 {
     private static readonly ConcurrentDictionary<Type, PropertyInfo[]> Binders = new();
+    private static readonly ConcurrentDictionary<Type, Action<DbCommand>> CommandInitializers = new();
 
     /// <summary>Creates a command with the SQL, timeout, transaction, and parameters already applied.</summary>
     public static DbCommand Create(
@@ -42,6 +43,7 @@ internal static class OpenIddictStoreCommands
         cancellationToken.ThrowIfCancellationRequested();
 
         var command = connection.CreateCommand();
+        CommandInitializers.GetOrAdd(command.GetType(), DiscoverCommandInitializer)(command);
         command.CommandText = sql;
         command.Transaction = transaction;
 
@@ -53,6 +55,16 @@ internal static class OpenIddictStoreCommands
         AddParameters(connection, command, parameters);
 
         return command;
+    }
+
+    private static Action<DbCommand> DiscoverCommandInitializer(Type type)
+    {
+        // Oracle binds by position by default, while store predicates reuse names and bags have their own order.
+        var property = type.GetProperty("BindByName", BindingFlags.Public | BindingFlags.Instance);
+
+        return property?.PropertyType == typeof(bool) && property.GetSetMethod() is not null
+            ? command => property.SetValue(command, true)
+            : _ => { };
     }
 
     /// <summary>

@@ -72,8 +72,9 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
                 {Column("DisplayName")}, {Column("DisplayNames")}, {Column("Name")}, {Column("Properties")},
                 {Column("Resources")})
             VALUES (
-                @Id, @ConcurrencyToken, @Description, @Descriptions, @DisplayName, @DisplayNames, @Name,
-                @Properties, @Resources)",
+                {Parameter("Id")}, {Parameter("ConcurrencyToken")}, {Parameter("Description")}, {Parameter("Descriptions")},
+                {Parameter("DisplayName")}, {Parameter("DisplayNames")}, {Parameter("Name")}, {Parameter("Properties")},
+                {Parameter("Resources")})",
             entity, transaction.Value, cancellationToken).ConfigureAwait(false);
 
         if (affected != 1)
@@ -107,11 +108,11 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
 
         // Deleting a Scope only cascades to its ScopeResources auxiliary rows and affects no other entity (design 16.2.1).
         await session.ExecuteAsync(
-            $"DELETE FROM {Table(Schema.ScopeResources)} WHERE {Column("ScopeId")} = @Id",
+            $"DELETE FROM {Table(Schema.ScopeResources)} WHERE {Column("ScopeId")} = {Parameter("Id")}",
             new { Id = entity.Id }, transaction.Value, cancellationToken).ConfigureAwait(false);
 
         var affected = await session.ExecuteAsync(
-            $"DELETE FROM {Table(Schema.Scopes)} WHERE {Column("Id")} = @Id " +
+            $"DELETE FROM {Table(Schema.Scopes)} WHERE {Column("Id")} = {Parameter("Id")} " +
             $"AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "ConcurrencyToken")}",
             new { Id = entity.Id, ConcurrencyToken = entity.ConcurrencyToken },
             transaction.Value, cancellationToken).ConfigureAwait(false);
@@ -175,7 +176,7 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
         for (var index = 0; index < distinct.Count; index++)
         {
             var parameter = "name" + index.ToString(CultureInfo.InvariantCulture);
-            placeholders.Add("@" + parameter);
+            placeholders.Add(Parameter(parameter));
             parameters[parameter] = distinct[index];
         }
 
@@ -200,7 +201,7 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
         var sql = $@"
             SELECT DISTINCT s.* FROM {Table(Schema.Scopes)} s
             INNER JOIN {Table(Schema.ScopeResources)} i ON i.{Column("ScopeId")} = s.{Column("Id")}
-            WHERE i.{Column("ResourceHash")} = @hash";
+            WHERE i.{Column("ResourceHash")} = {Parameter("hash")}";
 
         await foreach (var candidate in session.StreamAsync(
             sql,
@@ -371,15 +372,15 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
 
         var affected = await session.ExecuteAsync(
             $@"UPDATE {Table(Schema.Scopes)} SET
-                {Column("ConcurrencyToken")} = @Updated,
-                {Column("Description")} = @Description,
-                {Column("Descriptions")} = @Descriptions,
-                {Column("DisplayName")} = @DisplayName,
-                {Column("DisplayNames")} = @DisplayNames,
-                {Column("Name")} = @Name,
-                {Column("Properties")} = @Properties,
-                {Column("Resources")} = @Resources
-            WHERE {Column("Id")} = @Id
+                {Column("ConcurrencyToken")} = {Parameter("Updated")},
+                {Column("Description")} = {Parameter("Description")},
+                {Column("Descriptions")} = {Parameter("Descriptions")},
+                {Column("DisplayName")} = {Parameter("DisplayName")},
+                {Column("DisplayNames")} = {Parameter("DisplayNames")},
+                {Column("Name")} = {Parameter("Name")},
+                {Column("Properties")} = {Parameter("Properties")},
+                {Column("Resources")} = {Parameter("Resources")}
+            WHERE {Column("Id")} = {Parameter("Id")}
               AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "Previous")}",
             new
             {
@@ -441,7 +442,7 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
         ImmutableArray<string> resources, CancellationToken cancellationToken)
     {
         await session.ExecuteAsync(
-            $"DELETE FROM {Table(Schema.ScopeResources)} WHERE {Column("ScopeId")} = @scopeId",
+            $"DELETE FROM {Table(Schema.ScopeResources)} WHERE {Column("ScopeId")} = {Parameter("scopeId")}",
             new { scopeId }, transaction, cancellationToken).ConfigureAwait(false);
 
         if (resources.IsDefaultOrEmpty)
@@ -458,7 +459,7 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
             await session.ExecuteAsync(
                 $@"INSERT INTO {Table(Schema.ScopeResources)} (
                     {Column("ScopeId")}, {Column("ResourceHash")}, {Column("Resource")}, {Column("Position")})
-                   VALUES (@scopeId, @hash, @value, @position)",
+                   VALUES ({Parameter("scopeId")}, {Parameter("hash")}, {Parameter("value")}, {Parameter("position")})",
                 new
                 {
                     scopeId,

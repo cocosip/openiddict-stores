@@ -90,9 +90,11 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
                 {Column("PostLogoutRedirectUris")}, {Column("Properties")}, {Column("RedirectUris")},
                 {Column("Requirements")}, {Column("Settings")})
             VALUES (
-                @Id, @ConcurrencyToken, @ApplicationType, @ClientId, @ClientSecret, @ClientType, @ConsentType,
-                @DisplayName, @DisplayNames, @JsonWebKeySet, @Permissions, @PostLogoutRedirectUris, @Properties,
-                @RedirectUris, @Requirements, @Settings)",
+                {Parameter("Id")}, {Parameter("ConcurrencyToken")}, {Parameter("ApplicationType")},
+                {Parameter("ClientId")}, {Parameter("ClientSecret")}, {Parameter("ClientType")}, {Parameter("ConsentType")},
+                {Parameter("DisplayName")}, {Parameter("DisplayNames")}, {Parameter("JsonWebKeySet")},
+                {Parameter("Permissions")}, {Parameter("PostLogoutRedirectUris")}, {Parameter("Properties")},
+                {Parameter("RedirectUris")}, {Parameter("Requirements")}, {Parameter("Settings")})",
             entity, cancellationToken).ConfigureAwait(false);
 
         if (affected != 1)
@@ -141,7 +143,7 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
         // window between reading the set and deleting it (design 16.2.1 step 1, LIFE-02).
         var locked = await session.ExecuteAsync(
             $"UPDATE {applications} SET {Column("ConcurrencyToken")} = {Column("ConcurrencyToken")} " +
-            $"WHERE {Column("Id")} = @Id AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "ConcurrencyToken")}",
+            $"WHERE {Column("Id")} = {Parameter("Id")} AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "ConcurrencyToken")}",
             new { Id = entity.Id, ConcurrencyToken = entity.ConcurrencyToken },
             transaction.Value, cancellationToken).ConfigureAwait(false);
 
@@ -155,9 +157,9 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
         // application; the authorizations they reference outside A are kept.
         var tokenDelete = $@"
             DELETE FROM {tokens}
-            WHERE {Column("ApplicationId")} = @Id
+            WHERE {Column("ApplicationId")} = {Parameter("Id")}
                OR {Column("AuthorizationId")} IN (
-                    SELECT {Column("Id")} FROM {authorizations} WHERE {Column("ApplicationId")} = @Id)";
+                    SELECT {Column("Id")} FROM {authorizations} WHERE {Column("ApplicationId")} = {Parameter("Id")})";
 
         await session.ExecuteAsync(tokenDelete, new { Id = entity.Id }, transaction.Value, cancellationToken)
             .ConfigureAwait(false);
@@ -165,24 +167,24 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
         // Step 3: delete the auxiliary scope rows of A, then A itself.
         await session.ExecuteAsync(
             $"DELETE FROM {Table(Schema.AuthorizationScopes)} WHERE {Column("AuthorizationId")} IN " +
-            $"(SELECT {Column("Id")} FROM {authorizations} WHERE {Column("ApplicationId")} = @Id)",
+            $"(SELECT {Column("Id")} FROM {authorizations} WHERE {Column("ApplicationId")} = {Parameter("Id")})",
             new { Id = entity.Id }, transaction.Value, cancellationToken).ConfigureAwait(false);
 
         await session.ExecuteAsync(
-            $"DELETE FROM {authorizations} WHERE {Column("ApplicationId")} = @Id",
+            $"DELETE FROM {authorizations} WHERE {Column("ApplicationId")} = {Parameter("Id")}",
             new { Id = entity.Id }, transaction.Value, cancellationToken).ConfigureAwait(false);
 
         // Step 4: delete the two URI auxiliary tables, then the root record under the previous token.
         await session.ExecuteAsync(
-            $"DELETE FROM {Table(Schema.ApplicationRedirectUris)} WHERE {Column("ApplicationId")} = @Id",
+            $"DELETE FROM {Table(Schema.ApplicationRedirectUris)} WHERE {Column("ApplicationId")} = {Parameter("Id")}",
             new { Id = entity.Id }, transaction.Value, cancellationToken).ConfigureAwait(false);
 
         await session.ExecuteAsync(
-            $"DELETE FROM {Table(Schema.ApplicationPostLogoutRedirectUris)} WHERE {Column("ApplicationId")} = @Id",
+            $"DELETE FROM {Table(Schema.ApplicationPostLogoutRedirectUris)} WHERE {Column("ApplicationId")} = {Parameter("Id")}",
             new { Id = entity.Id }, transaction.Value, cancellationToken).ConfigureAwait(false);
 
         var affected = await session.ExecuteAsync(
-            $"DELETE FROM {applications} WHERE {Column("Id")} = @Id " +
+            $"DELETE FROM {applications} WHERE {Column("Id")} = {Parameter("Id")} " +
             $"AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "ConcurrencyToken")}",
             new { Id = entity.Id, ConcurrencyToken = entity.ConcurrencyToken },
             transaction.Value, cancellationToken).ConfigureAwait(false);
@@ -525,22 +527,22 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
 
         var affected = await session.ExecuteAsync(
             $@"UPDATE {Table(Schema.Applications)} SET
-                {Column("ConcurrencyToken")} = @Updated,
-                {Column("ApplicationType")} = @ApplicationType,
-                {Column("ClientId")} = @ClientId,
-                {Column("ClientSecret")} = @ClientSecret,
-                {Column("ClientType")} = @ClientType,
-                {Column("ConsentType")} = @ConsentType,
-                {Column("DisplayName")} = @DisplayName,
-                {Column("DisplayNames")} = @DisplayNames,
-                {Column("JsonWebKeySet")} = @JsonWebKeySet,
-                {Column("Permissions")} = @Permissions,
-                {Column("PostLogoutRedirectUris")} = @PostLogoutRedirectUris,
-                {Column("Properties")} = @Properties,
-                {Column("RedirectUris")} = @RedirectUris,
-                {Column("Requirements")} = @Requirements,
-                {Column("Settings")} = @Settings
-            WHERE {Column("Id")} = @Id
+                {Column("ConcurrencyToken")} = {Parameter("Updated")},
+                {Column("ApplicationType")} = {Parameter("ApplicationType")},
+                {Column("ClientId")} = {Parameter("ClientId")},
+                {Column("ClientSecret")} = {Parameter("ClientSecret")},
+                {Column("ClientType")} = {Parameter("ClientType")},
+                {Column("ConsentType")} = {Parameter("ConsentType")},
+                {Column("DisplayName")} = {Parameter("DisplayName")},
+                {Column("DisplayNames")} = {Parameter("DisplayNames")},
+                {Column("JsonWebKeySet")} = {Parameter("JsonWebKeySet")},
+                {Column("Permissions")} = {Parameter("Permissions")},
+                {Column("PostLogoutRedirectUris")} = {Parameter("PostLogoutRedirectUris")},
+                {Column("Properties")} = {Parameter("Properties")},
+                {Column("RedirectUris")} = {Parameter("RedirectUris")},
+                {Column("Requirements")} = {Parameter("Requirements")},
+                {Column("Settings")} = {Parameter("Settings")}
+            WHERE {Column("Id")} = {Parameter("Id")}
               AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "Previous")}",
             new
             {
@@ -658,7 +660,7 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
         var sql = $@"
             SELECT DISTINCT a.* FROM {Table(Schema.Applications)} a
             INNER JOIN {Table(table)} i ON i.{Column(ownerColumn)} = a.{Column("Id")}
-            WHERE i.{Column(hashColumn)} = @hash";
+            WHERE i.{Column(hashColumn)} = {Parameter("hash")}";
 
         await foreach (var candidate in session.StreamAsync(
             sql,
@@ -687,7 +689,7 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
         ImmutableArray<string> values, CancellationToken cancellationToken)
     {
         await session.ExecuteAsync(
-            $"DELETE FROM {Table(table)} WHERE {Column(ownerColumn)} = @ownerId",
+            $"DELETE FROM {Table(table)} WHERE {Column(ownerColumn)} = {Parameter("ownerId")}",
             new { ownerId }, transaction, cancellationToken).ConfigureAwait(false);
 
         if (values.IsDefaultOrEmpty)
@@ -705,7 +707,7 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
             await session.ExecuteAsync(
                 $@"INSERT INTO {Table(table)} ({Column(ownerColumn)}, {Column(hashColumn)}, {Column(valueColumn)},
                     {Column("Position")})
-                   VALUES (@ownerId, @hash, @value, @position)",
+                   VALUES ({Parameter("ownerId")}, {Parameter("hash")}, {Parameter("value")}, {Parameter("position")})",
                 new
                 {
                     ownerId,

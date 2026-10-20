@@ -72,8 +72,10 @@ public class OpenIddictStoreTokenStore<TToken> : OpenIddictStoreBase, IOpenIddic
                 {Column("RedemptionDate")}, {Column("ReferenceId")}, {Column("Status")}, {Column("Subject")},
                 {Column("Type")})
             VALUES (
-                @Id, @ConcurrencyToken, @ApplicationId, @AuthorizationId, @CreationDate, @ExpirationDate, @Payload,
-                @Properties, @RedemptionDate, @ReferenceId, @Status, @Subject, @Type)",
+                {Parameter("Id")}, {Parameter("ConcurrencyToken")}, {Parameter("ApplicationId")}, {Parameter("AuthorizationId")},
+                {Parameter("CreationDate")}, {Parameter("ExpirationDate")}, {Parameter("Payload")}, {Parameter("Properties")},
+                {Parameter("RedemptionDate")}, {Parameter("ReferenceId")}, {Parameter("Status")}, {Parameter("Subject")},
+                {Parameter("Type")})",
             ToParameters(entity), cancellationToken).ConfigureAwait(false);
 
         if (affected != 1)
@@ -101,7 +103,7 @@ public class OpenIddictStoreTokenStore<TToken> : OpenIddictStoreBase, IOpenIddic
 
         // Deleting a single Token needs no related collections (design 16.2.1): only that row is deleted, by Id and the previous token.
         var affected = await session.ExecuteAsync(
-            $"DELETE FROM {Table(Schema.Tokens)} WHERE {Column("Id")} = @Id " +
+            $"DELETE FROM {Table(Schema.Tokens)} WHERE {Column("Id")} = {Parameter("Id")} " +
             $"AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "ConcurrencyToken")}",
             new { Id = entity.Id, ConcurrencyToken = entity.ConcurrencyToken }, cancellationToken)
             .ConfigureAwait(false);
@@ -380,14 +382,14 @@ public class OpenIddictStoreTokenStore<TToken> : OpenIddictStoreBase, IOpenIddic
             WHERE {Column("Id")} IN (
                 SELECT t.{Column("Id")} FROM {tokens} AS t
                 WHERE t.{Column("CreationDate")} IS NOT NULL
-                  AND t.{Column("CreationDate")} < @threshold
+                  AND t.{Column("CreationDate")} < {Parameter("threshold")}
                   AND (
                         ({notInactive} AND {notValid})
                      OR EXISTS (
                             SELECT 1 FROM {authorizations} AS a
                             WHERE a.{Column("Id")} = t.{Column("AuthorizationId")}
                               AND {authorizationNotValid})
-                     OR (t.{Column("ExpirationDate")} IS NOT NULL AND t.{Column("ExpirationDate")} < @now)
+                     OR (t.{Column("ExpirationDate")} IS NOT NULL AND t.{Column("ExpirationDate")} < {Parameter("now")})
                   )
                 ORDER BY t.{Column("Id")}
                 {Dialect.BuildPaging(PruneBatchSize, null)}
@@ -561,19 +563,19 @@ public class OpenIddictStoreTokenStore<TToken> : OpenIddictStoreBase, IOpenIddic
 
         var affected = await session.ExecuteAsync(
             $@"UPDATE {Table(Schema.Tokens)} SET
-                {Column("ConcurrencyToken")} = @Updated,
-                {Column("ApplicationId")} = @ApplicationId,
-                {Column("AuthorizationId")} = @AuthorizationId,
-                {Column("CreationDate")} = @CreationDate,
-                {Column("ExpirationDate")} = @ExpirationDate,
-                {Column("Payload")} = @Payload,
-                {Column("Properties")} = @Properties,
-                {Column("RedemptionDate")} = @RedemptionDate,
-                {Column("ReferenceId")} = @ReferenceId,
-                {Column("Status")} = @Status,
-                {Column("Subject")} = @Subject,
-                {Column("Type")} = @Type
-            WHERE {Column("Id")} = @Id
+                {Column("ConcurrencyToken")} = {Parameter("Updated")},
+                {Column("ApplicationId")} = {Parameter("ApplicationId")},
+                {Column("AuthorizationId")} = {Parameter("AuthorizationId")},
+                {Column("CreationDate")} = {Parameter("CreationDate")},
+                {Column("ExpirationDate")} = {Parameter("ExpirationDate")},
+                {Column("Payload")} = {Parameter("Payload")},
+                {Column("Properties")} = {Parameter("Properties")},
+                {Column("RedemptionDate")} = {Parameter("RedemptionDate")},
+                {Column("ReferenceId")} = {Parameter("ReferenceId")},
+                {Column("Status")} = {Parameter("Status")},
+                {Column("Subject")} = {Parameter("Subject")},
+                {Column("Type")} = {Parameter("Type")}
+            WHERE {Column("Id")} = {Parameter("Id")}
               AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "Previous")}",
             parameters, cancellationToken).ConfigureAwait(false);
 

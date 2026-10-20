@@ -68,6 +68,11 @@ without writing code; see `tools/` in the repository root.
 | Schema | A dedicated schema; the script does not create it |
 | Isolation | Install while no application instance is writing to the schema |
 
+Runtime SQL uses `:name` parameters in all three modes, including MySQL-compatible mode, following the
+[DM .NET provider guide, section 5.7.4](https://eco.dameng.com/document/dm/zh-cn/pm/net-rogramming-guide.html).
+The driver's connection-string `compatibleMode` and the server's `DM.INI` setting have different purposes;
+neither the selected application dialect nor a server compatibility mode implies `@name` parameters.
+
 ## Execution order
 
 1. Back up the target schema.

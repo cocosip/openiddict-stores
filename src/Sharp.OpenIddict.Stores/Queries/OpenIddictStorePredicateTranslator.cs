@@ -365,7 +365,7 @@ internal sealed class OpenIddictStorePredicateTranslator
         {
             var name = NextParameter();
             _parameters[name] = _dialect.FormatDate(OpenIddictStoreJson.NormalizeUtc((DateTimeOffset)value!));
-            parts.Add($"{target.Sql} = @{name}");
+            parts.Add($"{target.Sql} = {_dialect.ParameterPrefix}{name}");
         }
 
         return parts.Count == 1 ? parts[0] : "(" + string.Join(" OR ", parts) + ")";
@@ -402,7 +402,7 @@ internal sealed class OpenIddictStorePredicateTranslator
         {
             var name = NextParameter();
             _parameters[name] = value;
-            placeholders.Add("@" + name);
+            placeholders.Add(_dialect.ParameterPrefix + name);
         }
 
         return $"{target.Sql} IN ({string.Join(", ", placeholders)})";
@@ -416,7 +416,7 @@ internal sealed class OpenIddictStorePredicateTranslator
         var name = NextParameter();
         _parameters[name] = value;
 
-        return "@" + name;
+        return _dialect.ParameterPrefix + name;
     }
 
     private static string Parenthesize(string sql)
