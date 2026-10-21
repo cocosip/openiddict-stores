@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Globalization;
-using System.Linq;
-using System.Linq.Expressions;
 using System.Reflection;
+using System.Collections.Concurrent;
 
 namespace Sharp.OpenIddict.Stores.Queries;
 
@@ -14,6 +13,10 @@ namespace Sharp.OpenIddict.Stores.Queries;
 /// </summary>
 internal static class OpenIddictStoreEntityMapper
 {
+    // Reflection lookups are cached per (type, name): rows are materialized in tight loops, and a metadata
+    // search per field per row shows up on large result sets.
+    private static readonly ConcurrentDictionary<(Type Type, string Name), PropertyInfo?> Properties = new();
+
     /// <summary>Creates an entity from the current row of the reader.</summary>
     public static object Map(DbDataReader reader, Type entityType, IOpenIddictStoreDialect dialect)
     {
@@ -33,7 +36,7 @@ internal static class OpenIddictStoreEntityMapper
                 continue;
             }
 
-            var property = entityType.GetProperty(column.Property, BindingFlags.Public | BindingFlags.Instance);
+            var property = ResolveProperty(entityType, column.Property);
 
             if (property is null || !property.CanWrite)
             {
@@ -63,8 +66,7 @@ internal static class OpenIddictStoreEntityMapper
 
         for (var ordinal = 0; ordinal < reader.FieldCount; ordinal++)
         {
-            var property = projectionType.GetProperty(
-                reader.GetName(ordinal), BindingFlags.Public | BindingFlags.Instance);
+            var property = ResolveProperty(projectionType, reader.GetName(ordinal));
 
             if (property is null || !property.CanWrite)
             {
@@ -78,6 +80,10 @@ internal static class OpenIddictStoreEntityMapper
 
         return instance;
     }
+
+    private static PropertyInfo? ResolveProperty(Type type, string name)
+        => Properties.GetOrAdd((type, name), static key =>
+            key.Type.GetProperty(key.Name, BindingFlags.Public | BindingFlags.Instance));
 
     /// <summary>Reads one column, letting the dialect own the date conversion.</summary>
     public static object? ReadValue(DbDataReader reader, int ordinal, Type targetType, IOpenIddictStoreDialect dialect)
@@ -105,19 +111,6 @@ internal static class OpenIddictStoreEntityMapper
             value, Nullable.GetUnderlyingType(targetType) ?? targetType, CultureInfo.InvariantCulture);
     }
 
-    /// <summary>
-    /// Rewrites a two-argument callback into a one-argument one by replacing the state parameter with a
-    /// constant. Everything derived from the state is then evaluated once at translation time.
-    /// </summary>
-    public static Expression<Func<IQueryable<TEntity>, IQueryable<TResult>>> BindState<TEntity, TState, TResult>(
-        Expression<Func<IQueryable<TEntity>, TState, IQueryable<TResult>>> query, TState state)
-    {
-        var body = new StateBinder(query.Parameters[1], state).Visit(query.Body)
-            ?? throw new NotSupportedException("The query callback body could not be bound to its state.");
-
-        return Expression.Lambda<Func<IQueryable<TEntity>, IQueryable<TResult>>>(body, query.Parameters[0]);
-    }
-
     private static bool IsScalar(Type type)
     {
         var underlying = Nullable.GetUnderlyingType(type) ?? type;
@@ -133,20 +126,4 @@ internal static class OpenIddictStoreEntityMapper
 
     private static object? DefaultOf(Type type)
         => type.IsValueType ? Activator.CreateInstance(type) : null;
-
-    /// <summary>Replaces the state parameter with a constant of the same declared type.</summary>
-    private sealed class StateBinder : ExpressionVisitor
-    {
-        private readonly ParameterExpression _parameter;
-        private readonly object? _value;
-
-        public StateBinder(ParameterExpression parameter, object? value)
-        {
-            _parameter = parameter;
-            _value = value;
-        }
-
-        protected override Expression VisitParameter(ParameterExpression node)
-            => node == _parameter ? Expression.Constant(_value, node.Type) : base.VisitParameter(node);
-    }
 }

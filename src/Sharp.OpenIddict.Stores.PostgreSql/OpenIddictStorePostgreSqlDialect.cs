@@ -101,6 +101,10 @@ public sealed class OpenIddictStorePostgreSqlDialect : IOpenIddictStoreDialect
         => $"({left} COLLATE {ExactCollation} = {right})";
 
     /// <inheritdoc />
+    /// <remarks>PostgreSQL keeps the empty string distinct from NULL, so an empty bind compares as a real value.</remarks>
+    public bool EmptyStringBindsAsNull => false;
+
+    /// <inheritdoc />
     /// <remarks>
     /// Deliberately different from SQL Server: Npgsql 6 and later reject a <see cref="DateTimeKind.Utc"/>
     /// value for <c>timestamp without time zone</c> and require <see cref="DateTimeKind.Unspecified"/>.

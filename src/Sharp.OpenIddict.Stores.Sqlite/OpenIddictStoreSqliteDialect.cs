@@ -65,6 +65,10 @@ public sealed class OpenIddictStoreSqliteDialect : IOpenIddictStoreDialect
         => $"({column} IS NULL OR {column} <> @{parameterName})";
 
     /// <inheritdoc />
+    /// <remarks>SQLite keeps the empty string distinct from NULL, so an empty bind compares as a real value.</remarks>
+    public bool EmptyStringBindsAsNull => false;
+
+    /// <inheritdoc />
     /// <remarks>
     /// Two TEXT columns compared with <c>=</c> already use the BINARY collation, so case, accents, and
     /// trailing spaces remain significant without extra compensation.

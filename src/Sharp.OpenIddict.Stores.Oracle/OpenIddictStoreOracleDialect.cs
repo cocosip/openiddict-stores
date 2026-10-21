@@ -13,18 +13,13 @@ namespace Sharp.OpenIddict.Stores.Oracle;
 /// </summary>
 /// <remarks>
 /// Empty strings are a documented Oracle behaviour rather than a dialect choice: Oracle stores <c>''</c> as NULL
-/// in <c>VARCHAR2</c>. The stores never need a workaround for it, because every optional filter is already
-/// skipped when the caller passes null or an empty string (design 16.1), so no predicate ever compares against
-/// an empty-string parameter. The README records the limitation for values inside JSON, which are unaffected.
+/// in <c>VARCHAR2</c>. The built-in store paths never compare against an empty-string parameter, because every
+/// optional filter is already skipped when the caller passes null or an empty string (design 16.1); a translated
+/// query callback can, and <see cref="EmptyStringBindsAsNull"/> tells the translator to keep C# semantics there.
+/// The README records the limitation for values inside JSON, which are unaffected.
 /// </remarks>
 public sealed class OpenIddictStoreOracleDialect : IOpenIddictStoreDialect
 {
-    /// <summary>
-    /// The binary sort specification. Passing it to <c>NLSSORT</c> makes the comparison byte-wise regardless of
-    /// the session's linguistic settings, which is what keeps case, accents, and normalization forms significant.
-    /// </summary>
-    public const string BinarySort = "NLSSORT({0}, 'NLS_SORT=BINARY')";
-
     /// <summary>Shared instance: the dialect is stateless.</summary>
     public static OpenIddictStoreOracleDialect Instance { get; } = new();
 
@@ -110,6 +105,13 @@ public sealed class OpenIddictStoreOracleDialect : IOpenIddictStoreDialect
     /// <remarks>Column-to-column comparison needs the same binary sort on both sides.</remarks>
     public string BuildExactStringColumnEquals(string left, string right)
         => $"(NLSSORT({left}, 'NLS_SORT=BINARY') = NLSSORT({right}, 'NLS_SORT=BINARY'))";
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Oracle binds and stores <c>''</c> as NULL, so no stored value can equal the empty string; the
+    /// translator resolves <c>== ""</c> to an unsatisfiable predicate instead of an accidental null match.
+    /// </remarks>
+    public bool EmptyStringBindsAsNull => true;
 
     /// <inheritdoc />
     /// <remarks>

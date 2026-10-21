@@ -65,13 +65,14 @@ internal sealed class OpenIddictStoreQueryBuilder<TEntity>
 
             if (step.Kind == StepKind.Select)
             {
-                // A projection that is not last means the callback projects and then filters or orders on
-                // the projection; that cannot be pushed into one statement and is rejected.
-                if (index != steps.Count - 1 && steps.Skip(index + 1).Any(next => next.Kind != StepKind.Select))
+                // A projection is translatable only as the callback's last operator: a Select followed by
+                // anything else — including another Select, whose lambda would operate on the projected
+                // shape rather than the entity — cannot be pushed into one statement and is rejected.
+                if (index != steps.Count - 1)
                 {
                     throw new NotSupportedException(
-                        "A Select that is followed by more operators cannot be translated: project last, or " +
-                        "filter and order before projecting (design 9.2).");
+                        "A Select must be the last operator of the query callback: project last, or filter " +
+                        "and order before projecting (design 9.2).");
                 }
 
                 continue;
@@ -167,13 +168,19 @@ internal sealed class OpenIddictStoreQueryBuilder<TEntity>
             : string.Join(", ", projection.Columns.Select(column =>
                 $"{_quoteColumn(column.Property)} AS {_quoteColumn(column.Alias)}"));
 
+        // A Where after a limit wraps the inner statement, and the outer predicate reads entity columns, so
+        // the derived table must expose every column: a column projection is applied one level further out
+        // instead of narrowing the wrapped query (which would leave the predicate quoting unknown columns).
+        var deferProjection = outerPredicates.Count > 0
+            && projection.Kind != OpenIddictStoreProjectionKind.Entity;
+
         // Paging without an explicit order would be non-deterministic; fall back to the stable primary key.
         if (orderBy.Count == 0 && (skip is not null || take is not null))
         {
             orderBy.Add(_quoteColumn("Id"));
         }
 
-        var sql = $"SELECT {columns} FROM {_quoteTable(table)}";
+        var sql = $"SELECT {(deferProjection ? "*" : columns)} FROM {_quoteTable(table)}";
 
         if (where.Count > 0)
         {
@@ -194,6 +201,12 @@ internal sealed class OpenIddictStoreQueryBuilder<TEntity>
             // accepts the bare form.
             var outer = string.Join(" AND ", outerPredicates);
             sql = $"SELECT * FROM ({sql.Trim()}) limited WHERE {outer}";
+        }
+
+        if (deferProjection)
+        {
+            // The alias carries no AS for the same Oracle rule as above.
+            sql = $"SELECT {columns} FROM ({sql.Trim()}) projected";
         }
 
         // Parameters are collected last: every predicate above may still register new ones.

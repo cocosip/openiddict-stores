@@ -86,6 +86,10 @@ public sealed class OpenIddictStoreMySqlDialect : IOpenIddictStoreDialect
         => $"(BINARY {left} = {right})";
 
     /// <inheritdoc />
+    /// <remarks>MySQL keeps the empty string distinct from NULL, so an empty bind compares as a real value.</remarks>
+    public bool EmptyStringBindsAsNull => false;
+
+    /// <inheritdoc />
     /// <remarks>
     /// Both servers accept a <c>DateTime</c> for <c>datetime(6)</c> whatever its <see cref="DateTimeKind"/> and
     /// store the value verbatim, so the UTC value is bound unchanged; the driver must not convert it. The value

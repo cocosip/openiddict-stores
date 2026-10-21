@@ -100,10 +100,11 @@ public static class OpenIddictStoreIdentifiers
     }
 
     /// <summary>
-    /// Rejects a template whose rendered identifiers would exceed the provider limit. Every object name in the
-    /// shipped templates starts at the prefix placeholder, so each one is measured as prefix plus its fixed
-    /// suffix; this keeps table, constraint, and index names within the limit for any accepted prefix
-    /// (design 15.4).
+    /// Rejects a template whose rendered identifiers would exceed the provider limit. Object names in the
+    /// shipped templates start at the prefix placeholder — but not necessarily at the placeholder itself:
+    /// constraint names carry a fixed head such as <c>FK___PREFIX__...</c>, so the whole rendered identifier
+    /// (head + prefix + suffix) is measured. Measuring only the prefix plus its suffix would let a script
+    /// pass rendering and then die mid-install on the first over-long constraint name (design 15.4).
     /// </summary>
     private static void ValidateRenderedIdentifiers(string template, IOpenIddictStoreDialect dialect, string prefix)
     {
@@ -113,10 +114,10 @@ public static class OpenIddictStoreIdentifiers
         }
 
         foreach (System.Text.RegularExpressions.Match match in
-                 System.Text.RegularExpressions.Regex.Matches(template, "__PREFIX__[A-Za-z0-9_]*"))
+                 System.Text.RegularExpressions.Regex.Matches(template, "([A-Za-z0-9_]*)__PREFIX__([A-Za-z0-9_]*)"))
         {
-            var suffix = match.Value.Substring("__PREFIX__".Length);
-            ValidateLength(prefix + suffix, dialect.MaximumIdentifierLength);
+            var identifier = match.Groups[1].Value + prefix + match.Groups[2].Value;
+            ValidateLength(identifier, dialect.MaximumIdentifierLength);
         }
     }
 

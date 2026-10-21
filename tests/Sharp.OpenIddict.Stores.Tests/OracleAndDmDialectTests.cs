@@ -32,6 +32,18 @@ public sealed class OracleAndDmDialectTests
     }
 
     [Fact]
+    public void EmptyStringBinding_FollowsTheCompatibilityMode()
+    {
+        // DM8 distinguishes '' from NULL by default; COMPATIBLE_MODE = 2 (Oracle) forcibly converts an
+        // empty string bound to a parameter to NULL, so only that mode raises the flag (the DM8 manual's
+        // COMPATIBLE_MODE parameter). The translator relies on it to keep C# comparison semantics.
+        Assert.True(Oracle.EmptyStringBindsAsNull);
+        Assert.True(OpenIddictStoreDmOracleCompatibleDialect.Instance.EmptyStringBindsAsNull);
+        Assert.False(Dm.EmptyStringBindsAsNull);
+        Assert.False(OpenIddictStoreDmMySqlCompatibleDialect.Instance.EmptyStringBindsAsNull);
+    }
+
+    [Fact]
     public void Oracle_IdentifierLimit_Is128_NotTheHistorical30()
     {
         // 30 was the limit before 12.2; the declared floor is 19c, and the longest table name is already 43.

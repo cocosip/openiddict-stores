@@ -64,4 +64,12 @@ public interface IOpenIddictStoreDialect
     /// <param name="left">The already quoted left column expression.</param>
     /// <param name="right">The already quoted right column expression.</param>
     string BuildExactStringColumnEquals(string left, string right);
+
+    /// <summary>
+    /// True when the database binds or stores the empty string as NULL — Oracle, and DM8 running in its
+    /// Oracle-compatible mode — so no stored value can ever equal <c>""</c>. The translator uses this to
+    /// keep C# comparison semantics: <c>column == ""</c> matches no row and <c>column != ""</c> holds for
+    /// every row, instead of the accidental null-equality a plain bind would produce (design 9.1).
+    /// </summary>
+    bool EmptyStringBindsAsNull { get; }
 }

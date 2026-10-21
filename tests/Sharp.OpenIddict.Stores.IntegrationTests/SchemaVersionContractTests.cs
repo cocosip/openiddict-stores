@@ -13,9 +13,10 @@ using Xunit;
 namespace Sharp.OpenIddict.Stores.IntegrationTests;
 
 /// <summary>
-/// Schema version contract from design 10.3/17: the stores verify Series/Version before the first operation,
-/// refuse to work against a mismatch instead of writing to an incompatible structure, never issue DDL, and
-/// remember the successful check only for the lifetime of that store configuration.
+/// Schema version contract from design 10.3/17: the stores verify Series/Version before the first operation
+/// against a database, refuse to work against a mismatch instead of writing to an incompatible structure,
+/// never issue DDL, and remember a successful check process-wide for that exact database — failures are
+/// never cached, and a different database always runs its own check.
 /// </summary>
 public sealed class SchemaVersionContractTests : IAsyncLifetime
 {
@@ -178,19 +179,55 @@ public sealed class SchemaVersionContractTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Verification_IsNotSharedBetweenStoreConfigurations()
+    public async Task Verification_IsSharedAcrossStoreInstancesForTheSameDatabase()
     {
         await InstallAsync();
 
         await CreateStore().CountAsync(default);
 
-        // A separate store instance is a separate configuration and must verify again, so it sees the change.
-        await ExecuteAsync("UPDATE OpenIddictSchemaVersions SET Version = 9");
+        // A successful check is cached process-wide for this database (dialect, version table, connection
+        // string), so a second store instance never re-reads the version table. A schema replaced under a
+        // running process still requires the restart design 17 already mandates.
+        await ExecuteAsync("DROP TABLE OpenIddictSchemaVersions");
 
-        var exception = await Assert.ThrowsAsync<OpenIddictStoreSchemaVersionException>(
-            () => CreateStore().CountAsync(default).AsTask());
+        Assert.Equal(0, await CreateStore().CountAsync(default));
+    }
 
-        Assert.Contains("version 9", exception.Message, StringComparison.Ordinal);
+    [Fact]
+    public async Task ADifferentDatabase_VerifiesIndependently()
+    {
+        await InstallAsync();
+        await CreateStore().CountAsync(default);
+
+        // A second, uninstalled database file is a different cache key: the process-level cache for the
+        // first database must never mask this one's missing schema.
+        var otherPath = TestDatabaseName.CreateFilePath("SchemaVersionContractTestsOther");
+        var otherConnection = new SqliteConnectionStringBuilder
+        {
+            DataSource = otherPath,
+            ForeignKeys = true,
+        }.ToString();
+
+        try
+        {
+            var store = CreateStore(connectionString: otherConnection);
+
+            await Assert.ThrowsAsync<OpenIddictStoreSchemaVersionException>(
+                () => store.CountAsync(default).AsTask());
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+
+            try
+            {
+                File.Delete(otherPath);
+            }
+            catch (IOException)
+            {
+                // A leftover temp file must never fail the suite.
+            }
+        }
     }
 
     [Fact]
@@ -226,14 +263,15 @@ public sealed class SchemaVersionContractTests : IAsyncLifetime
         Assert.Equal(0L, (long)(await command.ExecuteScalarAsync())!);
     }
 
-    private OpenIddictStoreApplicationStore<OpenIddictStoreApplication> CreateStore(string prefix = "OpenIddict")
+    private OpenIddictStoreApplicationStore<OpenIddictStoreApplication> CreateStore(
+        string prefix = "OpenIddict", string? connectionString = null)
     {
         var options = Options.Create(new OpenIddictStoreOptions { TablePrefix = prefix });
         options.Value.Providers.Add(OpenIddictStoreProvider.Sqlite);
 
         return new OpenIddictStoreApplicationStore<OpenIddictStoreApplication>(
             options,
-            new SqliteConnectionFactory(_connectionString),
+            new SqliteConnectionFactory(connectionString ?? _connectionString),
             OpenIddictStoreSqliteDialect.Instance,
             NullLogger<OpenIddictStoreApplicationStore<OpenIddictStoreApplication>>.Instance);
     }

@@ -94,5 +94,12 @@ public abstract class OpenIddictStoreDmDialectBase : IOpenIddictStoreDialect
             : OpenIddictStoreJson.AsUtc(reader.GetDateTime(ordinal));
 
     /// <inheritdoc />
+    /// <remarks>
+    /// DM8 distinguishes the empty string from NULL by default, so an empty bind compares as a real value;
+    /// only the Oracle-compatible mode converts empty strings to NULL, and that mode's dialect overrides this.
+    /// </remarks>
+    public virtual bool EmptyStringBindsAsNull => false;
+
+    /// <inheritdoc />
     public abstract string BuildPaging(int? count, int? offset);
 }

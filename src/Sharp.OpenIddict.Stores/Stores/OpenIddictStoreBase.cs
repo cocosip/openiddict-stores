@@ -65,8 +65,9 @@ public abstract class OpenIddictStoreBase
     }
 
     /// <summary>
-    /// The version guard for this configuration. It is created lazily and kept on the store instance, which is
-    /// Scoped, so the verified flag lives for exactly one store configuration.
+    /// The version guard for this configuration. It is created lazily and kept on the store instance; a
+    /// successful check is remembered process-wide for that database, so each guard only computes and holds
+    /// the cache key of its own connection (design 17).
     /// </summary>
     private OpenIddictStoreSchemaVersionGuard SchemaVersion
         => _schemaVersion ??= new OpenIddictStoreSchemaVersionGuard(
@@ -189,6 +190,26 @@ public abstract class OpenIddictStoreBase
 
     /// <summary>Maximum number of batches a single prune call may run (design 16.3).</summary>
     internal const int PruneBatchCount = 1_000;
+
+    /// <summary>
+    /// Splits a sequence into fixed-size groups so a parameter list never exceeds the dialect limit. Shared
+    /// by every multi-value lookup (scope names, authorization scope hashes) so all of them chunk the same way.
+    /// </summary>
+    protected static IEnumerable<List<string>> Chunk(IReadOnlyList<string> values, int size)
+    {
+        for (var start = 0; start < values.Count; start += size)
+        {
+            var length = Math.Min(size, values.Count - start);
+            var group = new List<string>(length);
+
+            for (var index = 0; index < length; index++)
+            {
+                group.Add(values[start + index]);
+            }
+
+            yield return group;
+        }
+    }
 
     /// <summary>
     /// Executes a translated query callback and returns the number of matching rows. COUNT wraps the

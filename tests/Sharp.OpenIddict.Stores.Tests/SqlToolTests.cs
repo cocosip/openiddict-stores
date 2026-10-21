@@ -101,4 +101,25 @@ public sealed class SqlToolTests
         Assert.Throws<ArgumentException>(() => DeploymentScriptFactory.Render("Firestore"));
         Assert.Throws<ArgumentException>(() => DeploymentScriptFactory.Render("Dm", mode: "teradata"));
     }
+
+    [Theory]
+    [InlineData(65, false)]
+    [InlineData(66, true)]
+    public void Render_SqlServerConstraintNames_CountTheFixedHeadInTheLengthLimit(int prefixLength, bool rejected)
+    {
+        // The longest SQL Server object name is FK___PREFIX__ApplicationPostLogoutRedirectUris_...: the
+        // fixed "FK_" head plus prefix plus suffix. Measuring only prefix + suffix (60 characters here)
+        // would accept a prefix that passes rendering and then dies mid-install on that constraint.
+        var prefix = new string('a', prefixLength);
+
+        if (rejected)
+        {
+            Assert.Throws<ArgumentException>(() => DeploymentScriptFactory.Render("SqlServer", prefix: prefix));
+        }
+        else
+        {
+            var sql = DeploymentScriptFactory.Render("SqlServer", prefix: prefix);
+            Assert.DoesNotContain("__PREFIX__", sql, StringComparison.Ordinal);
+        }
+    }
 }

@@ -172,25 +172,31 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
 
         // Exact membership: one dialect predicate per name, ORed together — the same rule FindByNameAsync
         // follows. A native IN would use the column collation, which is case-insensitive by default on SQL
-        // Server, so a name list could match scopes whose name differs in case (design 16.1.1). The number
-        // of names is protected by the dialect parameter limit.
+        // Server, so a name list could match scopes whose name differs in case (design 16.1.1). The names are
+        // chunked to the dialect parameter limit, so any list length stays executable. A scope matches at
+        // most one name (the unique name index), so chunks cannot overlap and no deduplication is needed.
         var distinct = names.Distinct(StringComparer.Ordinal).ToList();
-        var parameters = new Dictionary<string, object?>();
-        var conditions = new List<string>(distinct.Count);
+        var chunkSize = Math.Max(1, Dialect.MaximumParameters);
 
-        for (var index = 0; index < distinct.Count; index++)
+        foreach (var group in Chunk(distinct, chunkSize))
         {
-            var parameter = "name" + index.ToString(CultureInfo.InvariantCulture);
-            conditions.Add(Dialect.BuildExactStringEquals(Column("Name"), parameter));
-            parameters[parameter] = distinct[index];
-        }
+            var parameters = new Dictionary<string, object?>(StringComparer.Ordinal);
+            var conditions = new List<string>(group.Count);
 
-        var sql = $"SELECT * FROM {Table(Schema.Scopes)} WHERE ({string.Join(" OR ", conditions)})";
+            for (var index = 0; index < group.Count; index++)
+            {
+                var parameter = "name" + index.ToString(CultureInfo.InvariantCulture);
+                conditions.Add(Dialect.BuildExactStringEquals(Column("Name"), parameter));
+                parameters[parameter] = group[index];
+            }
 
-        await foreach (var row in session.StreamAsync(sql, parameters, MapEntity, cancellationToken)
-            .ConfigureAwait(false))
-        {
-            yield return (TScope)(object)row;
+            var sql = $"SELECT * FROM {Table(Schema.Scopes)} WHERE ({string.Join(" OR ", conditions)})";
+
+            await foreach (var row in session.StreamAsync(sql, parameters, MapEntity, cancellationToken)
+                .ConfigureAwait(false))
+            {
+                yield return (TScope)(object)row;
+            }
         }
     }
 

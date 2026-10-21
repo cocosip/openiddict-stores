@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
@@ -6,21 +7,27 @@ using System.Threading.Tasks;
 namespace Sharp.OpenIddict.Stores;
 
 /// <summary>
-/// Verifies once per store configuration that the installed schema matches the version this package requires
-/// (design 10.3, 17). The check runs before the first operation, its success is remembered on the guard
-/// instance, and the guard is Scoped so the knowledge lives exactly as long as the store configuration does.
-/// A failure is never cached: the next attempt re-reads the table, because the operator may have just run the
-/// required script. No DDL is ever issued here.
+/// Verifies, before the first operation against a database, that the installed schema matches the version
+/// this package requires (design 10.3, 17). A successful check is remembered process-wide for that exact
+/// database (dialect, version table, and a digest of the connection string), so the fast path adds no
+/// round-trip to any later operation — including operations from other store instances and scopes. A
+/// failure is never cached: the next attempt re-reads the table, because the operator may have just run
+/// the required script. No DDL is ever issued here.
 /// </summary>
 internal sealed class OpenIddictStoreSchemaVersionGuard
 {
+    // Success-only, keyed by dialect + version table + connection-string digest: rotating a factory to a
+    // different database verifies again, while the same database pays the check once per process. A schema
+    // replaced underneath a running process still requires the restart design 17 already mandates.
+    private static readonly ConcurrentDictionary<string, bool> VerifiedDatabases = new();
+
     private readonly OpenIddictStoreSchema _schema;
     private readonly IOpenIddictStoreDialect _dialect;
     private readonly IOpenIddictStoreConnectionFactory _connectionFactory;
     private readonly int? _commandTimeout;
 
-    // 0 = not checked yet, 1 = verified against this configuration.
-    private int _verified;
+    /// <summary>The cache key of this guard's database, computed once per guard instance.</summary>
+    private string? _cacheKey;
 
     public OpenIddictStoreSchemaVersionGuard(
         OpenIddictStoreSchema schema,
@@ -35,13 +42,15 @@ internal sealed class OpenIddictStoreSchemaVersionGuard
     }
 
     /// <summary>
-    /// Ensures the schema version was verified for this configuration. Returns immediately after the first
-    /// successful check; otherwise opens its own connection so the caller's session is not required.
+    /// Ensures the schema version was verified for this database. Returns immediately once a check has
+    /// succeeded in this process; otherwise opens its own connection so the caller's session is not required.
     /// </summary>
     public async ValueTask EnsureVerifiedAsync(CancellationToken cancellationToken)
     {
+        var cacheKey = await GetCacheKeyAsync(cancellationToken).ConfigureAwait(false);
+
         // The fast path must not open a connection: every store operation passes through here.
-        if (Volatile.Read(ref _verified) == 1)
+        if (VerifiedDatabases.ContainsKey(cacheKey))
         {
             return;
         }
@@ -84,7 +93,36 @@ internal sealed class OpenIddictStoreSchemaVersionGuard
                 $"version {OpenIddictStoreSchema.RequiredVersion}. {RequiredMessage()}");
         }
 
-        Volatile.Write(ref _verified, 1);
+        VerifiedDatabases.TryAdd(cacheKey, true);
+    }
+
+    /// <summary>
+    /// The cache key is derived from one unopened connection, so computing it costs no round-trip; the
+    /// digest keeps raw connection strings — which may carry credentials — out of the static table.
+    /// </summary>
+    private async ValueTask<string> GetCacheKeyAsync(CancellationToken cancellationToken)
+    {
+        if (_cacheKey is not null)
+        {
+            return _cacheKey;
+        }
+
+        var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            // BitConverter inserts dashes between the bytes on every target framework this package supports.
+            var digest = BitConverter.ToString(
+                OpenIddictStoreSession.Hash(connection.ConnectionString ?? string.Empty)).Replace("-", string.Empty);
+
+            _cacheKey = _dialect.GetType().FullName + "|" + _schema.VersionsTableName(_dialect) + "|" + digest;
+
+            return _cacheKey;
+        }
+        finally
+        {
+            await OpenIddictStoreConnections.DisposeAsync(connection).ConfigureAwait(false);
+        }
     }
 
     private async ValueTask<(string Series, int Version)?> ReadRowAsync(

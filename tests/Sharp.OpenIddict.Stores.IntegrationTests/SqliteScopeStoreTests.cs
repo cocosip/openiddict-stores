@@ -199,6 +199,25 @@ public sealed class SqliteScopeStoreTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task FindByNames_BeyondTheParameterBudget_IsChunkedIntoExecutableQueries()
+    {
+        // SQLite's dialect budget is 900 parameters; 905 distinct names must still resolve in one call,
+        // because OpenIddict feeds the store whatever scope names the client requested.
+        var names = Enumerable.Range(0, 905)
+            .Select(index => "scope" + index.ToString(CultureInfo.InvariantCulture))
+            .ToArray();
+
+        foreach (var name in names)
+        {
+            await _store.CreateAsync(new OpenIddictStoreScope { Name = name }, default);
+        }
+
+        var found = await ToListAsync(_store.FindByNamesAsync([.. names], default));
+
+        Assert.Equal(names.Length, found.Count);
+    }
+
+    [Fact]
     public async Task Update_RotatesTokenAndRejectsStaleSnapshot()
     {
         var scope = new OpenIddictStoreScope { Name = "s", DisplayName = "first" };

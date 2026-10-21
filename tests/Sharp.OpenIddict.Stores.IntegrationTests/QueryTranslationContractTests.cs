@@ -414,6 +414,36 @@ public sealed class QueryTranslationContractTests : IAsyncLifetime
                 query => query.Take(2).Skip(1), default).AsTask());
     }
 
+    [Fact]
+    public async Task Projection_AfterWhereAfterTake_FiltersThenProjectsTheLimitedRows()
+    {
+        await CreateAsync("a", status: "valid");
+        await CreateAsync("b", status: "revoked");
+        await CreateAsync("c", status: "valid");
+
+        // The Where filters the limited rows by a column the projection does not carry, so the projection
+        // must apply outside the wrapped statement: narrowing the derived table would quote an unknown
+        // column and fail at runtime (previously this shape generated exactly that broken SQL).
+        var subjects = await ToListAsync(_tokens.ListAsync<int, string>(
+            (query, _) => query.OrderBy(token => token.Subject).Take(2)
+                .Where(token => token.Status == "valid")
+                .Select(token => token.Subject!), 0, default));
+
+        Assert.Equal(["a"], subjects);
+    }
+
+    [Fact]
+    public async Task ASecondSelect_AfterAProjection_IsRejected()
+    {
+        await CreateAsync("a");
+
+        // The second Select's lambda operates on the projected shape, not the entity, so it cannot be
+        // translated to one statement over the table; it must be rejected rather than approximated.
+        await Assert.ThrowsAsync<NotSupportedException>(
+            () => ToListAsync(_tokens.ListAsync<int, string>(
+                (query, _) => query.Select(token => token.Subject).Select(subject => subject!), 0, default)));
+    }
+
     private async Task<string> CreateAsync(
         string? subject,
         string? status = null,

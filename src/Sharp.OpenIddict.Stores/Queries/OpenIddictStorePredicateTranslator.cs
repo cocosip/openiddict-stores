@@ -172,6 +172,14 @@ internal sealed class OpenIddictStorePredicateTranslator
                 $"The bounded string column '{column.Column!.Property}' can only be compared with a string value.");
         }
 
+        // Oracle, and DM8 in Oracle-compatible mode, bind '' as NULL, so no stored value can ever equal the
+        // empty string: C# semantics make equality unsatisfiable. The caller's NOT then yields "every row",
+        // which is exactly C#'s outcome for != "" on a database where "" cannot be stored (design 9.1).
+        if (value.Length == 0 && _dialect.EmptyStringBindsAsNull)
+        {
+            return "1 = 0";
+        }
+
         var name = NextParameter();
         _parameters[name] = value;
 
@@ -359,6 +367,15 @@ internal sealed class OpenIddictStorePredicateTranslator
 
     private string TranslateDateContains(Operand target, List<object?> nonNull, bool hasNull)
     {
+        // Each element binds one parameter; the budget is checked here for the same reason as BuildMembership.
+        if (_parameters.Count + nonNull.Count > _dialect.MaximumParameters)
+        {
+            throw new NotSupportedException(
+                $"The collection passed to Contains has {nonNull.Count} elements and no longer fits the " +
+                $"{_dialect.MaximumParameters}-parameter budget of this provider; narrow the collection " +
+                "(design 9.2).");
+        }
+
         var parts = new List<string>();
 
         if (hasNull)
@@ -387,6 +404,16 @@ internal sealed class OpenIddictStorePredicateTranslator
 
     private string BuildMembership(Operand target, List<object?> values)
     {
+        // Every element binds one parameter; a collection that cannot fit the provider's budget is rejected
+        // here instead of failing later as a raw provider error (the same budget the store-level chunking uses).
+        if (_parameters.Count + values.Count > _dialect.MaximumParameters)
+        {
+            throw new NotSupportedException(
+                $"The collection passed to Contains has {values.Count} elements and no longer fits the " +
+                $"{_dialect.MaximumParameters}-parameter budget of this provider; narrow the collection " +
+                "(design 9.2).");
+        }
+
         if (target.Column!.IsBoundedString)
         {
             // Exact membership: one dialect predicate per value, ORed together. A native IN would use the
@@ -401,12 +428,21 @@ internal sealed class OpenIddictStorePredicateTranslator
                         $"The bounded string column '{target.Column.Property}' can only be compared with strings.");
                 }
 
+                // On a dialect that binds '' as NULL the empty string matches nothing, so it contributes no
+                // predicate; C# semantics still hold because no stored value can equal it (design 9.1).
+                if (text.Length == 0 && _dialect.EmptyStringBindsAsNull)
+                {
+                    continue;
+                }
+
                 var name = NextParameter();
                 _parameters[name] = text;
                 parts.Add(_dialect.BuildExactStringEquals(target.Sql, name));
             }
 
-            return parts.Count == 1 ? parts[0] : "(" + string.Join(" OR ", parts) + ")";
+            return parts.Count == 0
+                ? "1 = 0"
+                : parts.Count == 1 ? parts[0] : "(" + string.Join(" OR ", parts) + ")";
         }
 
         // Non-string scalar: a parameterized IN keeps the semantics and stays within the parameter budget.

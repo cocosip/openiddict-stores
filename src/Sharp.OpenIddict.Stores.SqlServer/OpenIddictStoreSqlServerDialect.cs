@@ -36,7 +36,8 @@ public sealed class OpenIddictStoreSqlServerDialect : IOpenIddictStoreDialect
 
     /// <inheritdoc />
     public string QuoteIdentifier(string identifier)
-        => "[" + OpenIddictStoreIdentifiers.Validate(identifier, nameof(identifier)) + "]";
+        => "[" + OpenIddictStoreIdentifiers.ValidateLength(
+            OpenIddictStoreIdentifiers.Validate(identifier, nameof(identifier)), MaximumIdentifierLength) + "]";
 
     /// <inheritdoc />
     /// <remarks>
@@ -91,6 +92,10 @@ public sealed class OpenIddictStoreSqlServerDialect : IOpenIddictStoreDialect
     /// <remarks>Column-to-column comparison needs the same two checks as the parameter form.</remarks>
     public string BuildExactStringColumnEquals(string left, string right)
         => $"({left} COLLATE {ExactCollation} = {right} AND DATALENGTH({left}) = DATALENGTH({right}))";
+
+    /// <inheritdoc />
+    /// <remarks>SQL Server keeps the empty string distinct from NULL, so an empty bind compares as a real value.</remarks>
+    public bool EmptyStringBindsAsNull => false;
 
     /// <inheritdoc />
     /// <remarks>

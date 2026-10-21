@@ -272,23 +272,6 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
         }
     }
 
-    /// <summary>Splits a sequence into fixed-size groups so a parameter list never exceeds the dialect limit.</summary>
-    private static IEnumerable<List<string>> Chunk(IReadOnlyList<string> values, int size)
-    {
-        for (var start = 0; start < values.Count; start += size)
-        {
-            var length = Math.Min(size, values.Count - start);
-            var group = new List<string>(length);
-
-            for (var index = 0; index < length; index++)
-            {
-                group.Add(values[start + index]);
-            }
-
-            yield return group;
-        }
-    }
-
     /// <inheritdoc />
     public virtual async IAsyncEnumerable<TAuthorization> FindByApplicationIdAsync(
         string identifier, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)

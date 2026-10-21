@@ -10,9 +10,12 @@ namespace Sharp.OpenIddict.Stores.Dm;
 /// </summary>
 /// <remarks>
 /// <para>
-/// In this mode DM8 stores the empty string as NULL, like Oracle does. The stores need no workaround for that
-/// either way: every optional filter is skipped when the caller passes null or an empty string, so no
-/// predicate ever compares against an empty-string parameter.
+/// In this mode DM8 converts the empty string to NULL, like Oracle does: the DM8 documentation of
+/// <c>COMPATIBLE_MODE = 2</c> lists assigning an empty string to a string variable or parameter as one of
+/// the forced conversions. The built-in store paths never compare against an empty-string parameter
+/// (every optional filter is skipped when the caller passes null or an empty string, design 16.1); a
+/// translated query callback can, and the <see cref="EmptyStringBindsAsNull"/> override tells the
+/// translator to keep C# semantics there.
 /// </para>
 /// <para>
 /// The row-limiting clause follows the Oracle-style standard form rather than <c>LIMIT</c>: whether a given
@@ -31,6 +34,14 @@ public sealed class OpenIddictStoreDmOracleCompatibleDialect : OpenIddictStoreDm
 
     /// <summary>Shared instance: the dialect is stateless.</summary>
     public static OpenIddictStoreDmOracleCompatibleDialect Instance { get; } = new();
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Documented DM8 behaviour for <c>COMPATIBLE_MODE = 2</c>: an empty string assigned to a string variable
+    /// or parameter is forcibly converted to NULL, so no stored value can equal <c>""</c>; the translator
+    /// resolves <c>== ""</c> to an unsatisfiable predicate instead of an accidental null match.
+    /// </remarks>
+    public override bool EmptyStringBindsAsNull => true;
 
     /// <inheritdoc />
     /// <remarks>

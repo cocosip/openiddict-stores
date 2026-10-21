@@ -35,11 +35,13 @@ public sealed class OpenIddictStoreDmDialect : OpenIddictStoreDmDialectBase
 
     /// <inheritdoc />
     /// <remarks>
-    /// <c>LIMIT</c>/<c>OFFSET</c> is used because DM8 documents it as one of its paging forms and it does not
-    /// depend on a row-count pseudocolumn. Which forms a given instance accepts still depends on the
-    /// compatibility mode, so this clause is one of the blockers listed in <c>Sql/README.md</c>. A count-only
-    /// request needs no sentinel; an offset without a count uses the largest signed 32-bit value, which is the
-    /// documented "effectively unbounded" idiom rather than a magic constant of this project's own invention.
+    /// <c>LIMIT</c>/<c>OFFSET</c> is used because DM8 documents it as one of its paging forms (the SELECT
+    /// grammar accepts <c>LIMIT n</c>, <c>LIMIT n OFFSET m</c>, and the two reversed-argument forms) and it does
+    /// not depend on a row-count pseudocolumn. Which forms a given instance accepts still depends on the
+    /// compatibility mode, so this clause is one of the blockers listed in <c>Sql/README.md</c>. DM8 defines
+    /// the row count as a plain integer with no documented maximum and no documented "all rows" idiom, so a
+    /// count-less offset uses the largest signed 32-bit value as the project's sentinel for "effectively all
+    /// remaining rows" — the largest value the documented grammar is guaranteed to accept on every mode.
     /// </remarks>
     public override string BuildPaging(int? count, int? offset)
     {

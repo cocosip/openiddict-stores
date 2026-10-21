@@ -36,7 +36,9 @@ public sealed class OpenIddictStoreDmMySqlCompatibleDialect : OpenIddictStoreDmD
     /// <remarks>
     /// The MySQL-style clause: <c>LIMIT m</c>, <c>OFFSET n</c>, or both in sequence. Confirming that a real
     /// DM8 instance in MySQL-compatible mode accepts this form is an acceptance item in <c>Sql/README.md</c>,
-    /// like every mode-dependent behaviour.
+    /// like every mode-dependent behaviour. DM8 documents the LIMIT row count as a plain integer without
+    /// MySQL's unsigned 64-bit sentinel, so a count-less offset uses the same signed 32-bit sentinel as the
+    /// native mode rather than MySQL's <c>18446744073709551615</c>.
     /// </remarks>
     public override string BuildPaging(int? count, int? offset)
     {
