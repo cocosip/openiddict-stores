@@ -34,14 +34,24 @@ needs its own entry, its own script if the syntax differs, and its own full acce
 
 Exact comparison emits a plain equality plus a `CHAR_LENGTH` guard (see the blockers section). DM8 compares
 strings case-sensitively only on an instance initialized with the default `CASE_SENSITIVE=1`; an instance
-created with `CASE_SENSITIVE=0` folds case in comparisons and silently corrupts
+created with `CASE_SENSITIVE=0` folds case in comparisons and would silently corrupt
 `FindByClientId`/`FindByName`/`FindByReferenceId`/`FindBySubject` lookups. No compatibility mode overrides
 that setting, so **the deployment must run on a `CASE_SENSITIVE=1` instance** — MySQL-compatible migrations
 in particular are often initialized with `0`, which is not a supported configuration of this provider.
 
-`CASE_SENSITIVE` is fixed at database-creation time and is not exposed through `v$dm_ini`; the acceptance
-suite therefore probes the behaviour directly (store `abc`, look up `ABC`, expect no row) rather than reading
-a flag. The probes on the accepted instances returned no row, so both behave case-sensitively.
+`CASE_SENSITIVE` is fixed at database-creation time and is not exposed through `v$dm_ini`, so no code can read
+it. Instead of trusting the deployment, every DM8 dialect declares an `IOpenIddictStoreStartupProbe`: on the
+first use of a database — in the same batch as the schema version check, and cached with it — the store runs
+
+```sql
+SELECT CASE WHEN 'abc' = 'ABC' THEN 1 ELSE 0 END FROM {prefix}SchemaVersions
+```
+
+and throws `OpenIddictStoreServerConfigurationException` when it returns 1, naming the setting and stating that
+the store will not fall back to an inexact comparison. The probe costs one round-trip per process, never one per
+request, and the version table is its `FROM` source so no catalog object has to be reachable. The acceptance
+suite probes the same behaviour directly (store `abc`, look up `ABC`, expect no row), so the runtime check and
+the acceptance evidence test the same thing.
 
 ## Rendering the deployment copy
 
@@ -103,18 +113,23 @@ A failure part-way leaves the objects already created in place.
 
 ## Known limitations and open blockers
 
-Two mode-dependent behaviours were **release blockers**; both are now closed for native and Oracle-compatible
-mode by the 2026-10-20 acceptance run (E-044), and stay open only for MySQL-compatible mode until that mode
-gets its own run:
+Two mode-dependent behaviours were **release blockers**. Both are closed for native and Oracle-compatible mode
+by the 2026-10-20 acceptance run (E-044). For MySQL-compatible mode they are now covered by their own suite
+(`DmMySqlCompatibleStoreContractTests`, the same 15 facts) but that suite has not been run yet, so they stay
+open until it is:
 
-- **Exact string comparison (design 16.1.1) — closed for native and Oracle-compatible.** The run proved case
-  and accent significance on both instances, and it surfaced one genuine defect: DM8 compares strings
-  blank-padded, so `client` and `client ` compared equal. The dialects now guard every exact comparison with
-  `CHAR_LENGTH` (a character count, so the guard cannot depend on either side's character set), and the
-  trailing-space variant is rejected on both real instances.
-- **Paging clause per mode — closed for native and Oracle-compatible.** Native's `LIMIT [count] [OFFSET n]`
-  and Oracle-compatible's `OFFSET n ROWS / FETCH NEXT m ROWS ONLY` were both accepted by real servers,
-  including the offset-without-count shape. MySQL-compatible still needs its own run.
+- **Exact string comparison (design 16.1.1) — closed for native and Oracle-compatible; unverified for
+  MySQL-compatible.** The run proved case and accent significance on both instances, and it surfaced one
+  genuine defect: DM8 compares strings blank-padded, so `client` and `client ` compared equal. The dialects now
+  guard every exact comparison with `CHAR_LENGTH` (a character count, so the guard cannot depend on either
+  side's character set), and the trailing-space variant is rejected on both real instances. Every mode also
+  refuses to start on an instance that folds case (see the `CASE_SENSITIVE` section above), so this blocker
+  cannot silently reopen.
+- **Paging clause per mode — closed for native and Oracle-compatible; unverified for MySQL-compatible.**
+  Native's `LIMIT [count] [OFFSET n]` and Oracle-compatible's `OFFSET n ROWS / FETCH NEXT m ROWS ONLY` were
+  both accepted by real servers, including the offset-without-count shape. MySQL-compatible renders the same
+  `LIMIT [count] [OFFSET n]` as native mode, but "the same text as a verified mode" is not evidence that this
+  mode's server accepts it — that is what the MySQL-compatible suite is for.
 
 Further limitations:
 
@@ -140,7 +155,12 @@ host — and each passed 15/15: install script (into the dedicated schema), re-r
 trailing-space guard, the unique keys treating NULLs as distinct, CAS updates, the mode's paging clause,
 associated deletes, bulk revocation with a NULL status, and prune. The run also exposed and this series fixes
 the templates' inline `NULL` markers, which DM8 rejects just as Oracle does (nullable columns now carry no
-marker). The MySQL-compatible mode remains unaccepted: it has no run, and the two blockers above stay open
-for it. The driver has no `net10` asset, so the acceptance ran on a net8.0 host, and a net10 host refuses
+marker). The driver has no `net10` asset, so the acceptance ran on a net8.0 host, and a net10 host refuses
 these suites outright. Per the E-028 rule the evidence comes from servers the user provided and must be
 re-earned on every schema series bump.
+
+**MySQL-compatible mode is unaccepted, and now has the suite it needs.** `DmMySqlCompatibleStoreContractTests`
+declares the same 15 facts against `COMPATIBLE_MODE=4`, reading the connection string from the `DmMySql` secret
+and the schema from `DmMySqlSchema`. With those two secrets unset every fact reports itself as skipped, so a
+missing run stays visible instead of looking like a pass. The two blockers above stay open for this mode until
+that suite is run and recorded.

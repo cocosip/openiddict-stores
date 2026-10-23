@@ -6,7 +6,11 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using Sharp.OpenIddict.Stores;
 using Sharp.OpenIddict.Stores.Dm;
+using Sharp.OpenIddict.Stores.MySql;
 using Sharp.OpenIddict.Stores.Oracle;
+using Sharp.OpenIddict.Stores.PostgreSql;
+using Sharp.OpenIddict.Stores.Sqlite;
+using Sharp.OpenIddict.Stores.SqlServer;
 using Xunit;
 
 namespace Sharp.OpenIddict.Stores.Tests;
@@ -140,6 +144,41 @@ public sealed class OracleAndDmDialectTests
         Assert.Equal(string.Empty, Dm.BuildPaging(null, null));
         Assert.Equal(string.Empty, OpenIddictStoreDmOracleCompatibleDialect.Instance.BuildPaging(null, null));
         Assert.Equal(string.Empty, OpenIddictStoreDmMySqlCompatibleDialect.Instance.BuildPaging(null, null));
+    }
+
+    /// <summary>
+    /// DM8 is the only provider whose exact-comparison guarantee depends on an instance setting the runtime
+    /// cannot read, so it is the only one that declares a startup probe. The probe compares two values, because
+    /// <c>CASE_SENSITIVE</c> is fixed at database-creation time and is absent from <c>v$dm_ini</c> (design
+    /// 16.1.1). A dialect that could force the semantics into its predicates must not carry one: an extra
+    /// round-trip and a second failure mode for nothing.
+    /// </summary>
+    [Fact]
+    public void Dm_DeclaresAStartupProbe_AndTheOtherDialectsDoNot()
+    {
+        foreach (var dialect in new[] { Dm, OpenIddictStoreDmOracleCompatibleDialect.Instance, OpenIddictStoreDmMySqlCompatibleDialect.Instance })
+        {
+            var probe = Assert.IsAssignableFrom<IOpenIddictStoreStartupProbe>(dialect);
+
+            // The comparison itself is the probe: no catalog view exposes the setting.
+            var sql = probe.BuildProbeSql("\"OIDC\".\"OpenIddictSchemaVersions\"");
+
+            Assert.Contains("'abc' = 'ABC'", sql, StringComparison.Ordinal);
+            Assert.Contains("FROM \"OIDC\".\"OpenIddictSchemaVersions\"", sql, StringComparison.Ordinal);
+
+            // The failure message has to name the setting and say the store refuses rather than degrades.
+            Assert.Contains("CASE_SENSITIVE=0", probe.ProbeFailureMessage, StringComparison.Ordinal);
+            Assert.Contains("will not fall back", probe.ProbeFailureMessage, StringComparison.Ordinal);
+        }
+
+        foreach (var dialect in new IOpenIddictStoreDialect[]
+                 {
+                     Oracle, OpenIddictStoreSqlServerDialect.Instance, OpenIddictStorePostgreSqlDialect.Instance,
+                     OpenIddictStoreMySqlDialect.Instance, OpenIddictStoreSqliteDialect.Instance,
+                 })
+        {
+            Assert.IsNotAssignableFrom<IOpenIddictStoreStartupProbe>(dialect);
+        }
     }
 
     /// <summary>

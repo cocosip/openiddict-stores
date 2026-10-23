@@ -31,7 +31,12 @@ public sealed class OpenIddictStoreSqlServerDialect : IOpenIddictStoreDialect
     public int MaximumParameters => 2_000;
 
     /// <inheritdoc />
-    /// <remarks>SQL Server allows 128 characters for identifiers and rejects anything longer instead of truncating it.</remarks>
+    /// <remarks>
+    /// SQL Server allows 128 characters for identifiers and rejects anything longer instead of truncating it.
+    /// The check is applied in bytes (<see cref="OpenIddictStoreIdentifiers.ValidateLength"/>), a deliberately
+    /// conservative limit for a non-ASCII prefix: it rejects some names SQL Server would accept rather than
+    /// risk one that gets truncated. Rejection is the safe direction (design 15.4).
+    /// </remarks>
     public int MaximumIdentifierLength => 128;
 
     /// <inheritdoc />

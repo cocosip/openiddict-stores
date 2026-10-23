@@ -90,7 +90,9 @@
 
 ### 待修（后续修复清单，按严重度）
 
-#### 待修 1：达梦 `CASE_SENSITIVE=0` 导致静默腐化（阻断）
+本轮 8 条待修已在第 2 轮修复 5 条（1、2、3、4、6）；第 7 条在第 1 轮已顺手修掉。下列保留记录并标注状态，仍待修的只有第 5、8 项。
+
+#### 待修 1：达梦 `CASE_SENSITIVE=0` 导致静默腐化（阻断）——**已修（第 2 轮）**
 
 - 位置：`src/Sharp.OpenIddict.Stores.Dm/Sql/README.md:33-42`（部署前提）；`src/Sharp.OpenIddict.Stores/OpenIddictStoreSchemaVersionGuard.cs`（建议的探针位置）。
 - 现象：其余五个方言都把精确比较语义强制进谓词（`COLLATE BIN2`、`COLLATE "C"`、`BINARY`、`NLSSORT(...BINARY)`），只有达梦是裸 `=` 加 `CHAR_LENGTH` 长度守卫。达梦的 `CASE_SENSITIVE` 是**建库时固定**、建库后不可改的实例级参数；`CASE_SENSITIVE=0` 的实例上 `'abc' = 'ABC'` 成立，`FindByClientId` 会静默命中错误的行。
@@ -103,8 +105,10 @@
 
   返回 1 即在启动时抛出带明确指引的异常（"该实例以 CASE_SENSITIVE=0 初始化，精确比较无法保证"），把静默腐化变成明确报错。探针结果随版本校验一起缓存，不增加每请求往返。
 - 备注：`Dm` 的验收套件已经用"存 `abc` 再查 `ABC`"的方式行为化验证过这一点，可以直接复用该断言作为探针的测试。
+- **实际修法（与建议的差异）：** 新增 `IOpenIddictStoreStartupProbe`，由 `OpenIddictStoreDmDialectBase` 实现；`OpenIddictStoreSchemaVersionGuard` 在版本校验通过后调用它，与成功缓存同批。`FROM` 源改为 `{prefix}SchemaVersions` 而不是 `DUAL`——版本表刚刚被读过，必然存在、可读且只有一行，不依赖各兼容模式下目录对象（`SYS.SYSDUAL2` 等）的可见性与授权。失败抛新增的 `OpenIddictStoreServerConfigurationException`（**不是** `OpenIddictStoreSchemaVersionException`：表结构正确，重跑脚本无用，必须重建实例）。
+- 证据：`SchemaVersionContractTests` 新增 4 项（不支持实例被拒绝且消息含 `CASE_SENSITIVE`/`will not fall back`、支持实例被接受、探针只随缓存校验执行一次、异常类型不是版本异常），并**回退 `VerifyServerConfigurationAsync` 调用确认其中 3 项确实失败**后恢复；`OracleAndDmDialectTests.Dm_DeclaresAStartupProbe_AndTheOtherDialectsDoNot` 锁定三个达梦方言有探针、其余五方言无探针。
 
-#### 待修 2：达梦 MySQL 兼容模式无行为差异、无验收证据（重大）
+#### 待修 2：达梦 MySQL 兼容模式无行为差异、无验收证据（重大）——**已修（第 2 轮，选"补证据"）**
 
 - 位置：`src/Sharp.OpenIddict.Stores.Dm/OpenIddictStoreDmMySqlCompatibleDialect.cs`；`src/Sharp.OpenIddict.Stores.Dm/Sql/1/install/mysql-compatible/`。
 - 现象：该方言与原生方言在代码上等价——`BuildPaging` 输出逐字节相同（`LIMIT`/`OFFSET`），`EmptyStringBindsAsNull` 未覆写（继承 `false`），DDL 正文与另两份逐字节相同。`Sql/README.md` 自己标注 "remains unaccepted"，且 `tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests/` 下没有对应的 MySQL 兼容模式套件。
@@ -112,8 +116,9 @@
   - **补证据**：加一套 `DmMySqlAcceptanceFact` 与对应 secrets 键（`DmMySql`/`DmMySqlSchema`），跑通后再声明支持。
   - **砍掉**：若达梦 MySQL 兼容模式没有真实用户，删除该模式、manifest 条目与模板，把声明面从三模式收回到两模式。
 - 不建议保留现状：一个既不区分行为、也无证据的模式，只会让人误以为它被验证过。
+- **处置（用户选择"补证据"）：** 新增 `DmMySqlCompatibleStoreContractTests`（15 项，与另两模式同一事实清单）与 `AcceptanceServers.DmMySql`/`DmMySqlSchema` 两个 secrets 键。本地无达梦服务端，**15 项如实跳过**（已验证跳过而非通过）；`Sql/README.md` 明确写"已有套件、尚未运行"，两个 blocker 对该模式保持未关闭，不声明为已验收。
 
-#### 待修 3：PostgreSQL 摘要列无宽度约束（中等）
+#### 待修 3：PostgreSQL 摘要列无宽度约束（中等）——**已修（第 2 轮）**
 
 - 位置：`src/Sharp.OpenIddict.Stores.PostgreSql/Sql/1/install/v0001.sql.template:92,102,112,122`。
 - 现象：四张辅助表的摘要列声明为 `bytea`（任意长度），SQL Server 同名列是 `binary(32)`，达梦/Oracle 是 `varbinary(32)`/`RAW(32)`——数据库层强制 SHA-256 宽度。PostgreSQL 不强制，一个非 32 字节的摘要行会永久不可达：`FindByCollectionAsync` 用 32 字节 SHA-256 做候选查找（`i."UriHash" = @hash`），辅助行与权威 JSON 会静默不一致。
@@ -124,26 +129,30 @@
   ```
 
   改完更新 `manifest.json` 的 `sha256`。
+- **实际修法：** 四个列各加命名约束 `CK___PREFIX__*_<列名>`（命名而非匿名，便于运维按名定位），`manifest.json` 摘要同步为 `DDCE5EF4…`，`Sql/README.md` 的 limitations 从"由调用方保证"改为"由 CHECK 强制"。`PostgreSqlDialectTests.InstallTemplate_ConstrainsEveryDigestColumnToTheSha256Width` 锁定四列四约束，并**删掉一个约束确认测试失败**后恢复。
+- 顺带修的根因：`SchemaConsistencyTests` 的模板解析器把表体内的整行注释当成列声明（新增注释后解析出 `ApplicationRedirectUris.so`、`unlike`、`which` 等假列）。已在解析器里剥掉整行注释，而不是把注释挪出表体——模板里带注释是合法的，解析器本来就该处理。
 
-#### 待修 4：标识符上限按字节计数，但两处注释写的是"字符"（轻微）
+#### 待修 4：标识符上限按字节计数，但两处注释写的是"字符"（轻微）——**已修（第 2 轮）**
 
 - 位置：`src/Sharp.OpenIddict.Stores/OpenIddictStoreIdentifiers.cs:51`（实际按 `Encoding.UTF8.GetByteCount` 计字节）；`src/Sharp.OpenIddict.Stores.MySql/OpenIddictStoreMySqlDialect.cs:35` 与 SQL Server 方言的同类注释写 "characters"。
 - 现象：SQL Server 的 `sysname` 与 MySQL 的标识符上限都是 **64 个字符**，而校验按 UTF-8 字节算。对非 ASCII 前缀（例如中文）会**提前拒绝**合法名称。
 - 为什么只是轻微：失败方向是安全的（拒绝而非截断），不会产生错误对象；只影响可用性。
 - 最小修法：要么把两处注释改成"字节"并说明这是保守上限，要么按 provider 区分字符/字节两种计量。前者一行注释即可，后者需要给方言接口加一个计量单位枚举——除非真有非 ASCII 前缀的用户，否则建议只改注释。
+- **处置：** 按建议只改注释（MySQL 与 SQL Server 两处），写明按字节计量、对非 ASCII 前缀是**故意保守**、拒绝方向安全。不引入计量单位枚举。
 
-#### 待修 5：SqlTool 未实现架构升级路径（中等）
+#### 待修 5：SqlTool 未实现架构升级路径（中等）——**不修（第 2 轮确认）**
 
 - 位置：`tools/Sharp.OpenIddict.Stores.SqlTool/DeploymentScriptFactory.cs`；`Sql/manifest.json` 的 `sourceSeries`/`sourceVersion`/`type` 字段。
 - 现象：manifest 格式已声明 upgrade 条目（`type: "upgrade"` + `sourceSeries`/`sourceVersion`），但工具只渲染安装脚本，没有 `--type upgrade`、没有源/目标版本选择。本轮已让它**跳过**非 install 条目（避免把升级脚本当安装脚本），但这只是不误用，不等于支持升级。
 - 当前无实际影响：系列 1 是首个系列，不存在升级脚本，`SqlAssetTests` 也已断言"没有 upgrade 条目"。
 - 最小修法：等到真的发布系列 2 时再实现；届时工具需要 `--type`、`--from`/`--to`，并按 `sourceSeries` 过滤。现在不动是对的。
 
-#### 待修 6：`BuildPaging` 的 count=0 例外未写进接口契约（轻微）
+#### 待修 6：`BuildPaging` 的 count=0 例外未写进接口契约（轻微）——**已修（第 2 轮）**
 
 - 位置：`src/Sharp.OpenIddict.Stores/IOpenIddictStoreDialect.cs:41`（接口注释）；`src/Sharp.OpenIddict.Stores.SqlServer/OpenIddictStoreSqlServerDialect.cs:65-68`（实现抛 `NotSupportedException`）。
 - 现象：接口注释只说"offset 存在而 count 为 null 时仍须返回正确行数"，没提 SQL Server 对 `count: 0` 会抛异常。新写一个方言或调用方只能靠读 SQL Server 实现的 remarks 才知道。
 - 最小修法：接口注释补一句"count 为 0 时允许抛 `NotSupportedException`（SQL Server 的 `FETCH NEXT 0` 是语法错误），调用方须在构造 SQL 前处理 `Take(0)`"。一行注释。
+- **处置：** 按建议补进接口 `<summary>`，并指明现有调用方（查询构建器）如何满足它：`Take(0)` 被翻译成 `1 = 0` 谓词。
 
 #### 待修 7：`docs/development.md` §9.2 仍指向 `Sql/7`（轻微）——本轮已顺手修掉
 
@@ -152,12 +161,13 @@
 - 已改为 `Sql/1/install/v0001.sql.template`。
 - 明确不改的部分：`docs/development.md` 里其余 `Sql/7` 与 `OpenIddictDapper*` 出现在 E-0xx 历史记录中（E-029/E-032/E-040/E-043 等），它们记录的是当时的事实，**不改写历史记录**；只有前瞻性的 §9 需要与现状一致。
 
-#### 待修 8：Oracle / MySQL 本轮无真库验收（记录，非缺陷）
+#### 待修 8：Oracle / MySQL 本轮无真库验收（记录，非缺陷）——**套件已补齐（第 2 轮），仍待真库执行**
 
 - 本轮对 Oracle 与 MySQL 只做静态走查加权威手册核对，没有运行真库套件（本地约束：不连接数据库服务端）。
 - 需要在用户环境补跑的两项：
   - **Oracle**：`NLSSORT(..., 'NLS_SORT=BINARY')` 作用于谓词会使索引失效（`Sql/README.md` 已承认）。功能正确性有 E-044 的历史证据，但大表性能需实测。
   - **MySQL/MariaDB**：`LIMIT 18446744073709551615` 作为"无界哨兵"在 MariaDB 10.6 上的接受度未验证；`utf8mb4_bin` 是 PAD SPACE，唯一索引会把 `client` 与 `client ` 视为重复（模板已如实记录），但该冲突路径没有真库用例。
+- **第 2 轮复核发现**：MySQL/MariaDB 缺的不是"跑一次"，而是**套件本身**——`ServerAcceptanceTests` 里没有对应套件、csproj 没引用 `MySqlConnector`、`AcceptanceServers` 连键都没有。已补 `MySqlStoreContractTests`/`MariaDbStoreContractTests` 各 15 项 + 两个 secrets 键（E-048），无 secrets 时如实跳过。真库一栏仍记未验证，须实际执行后才可改口径。
 
 ### 误报与排除（避免下次重复提出）
 
@@ -180,15 +190,55 @@
 pwsh ./scripts/verify.ps1
 ```
 
-预期：Restore → Build（全 TFM，非增量）→ Pack 8 包 → 测试全绿，**454 项通过（124 单元 + 330 集成），16 项跳过**，退出码 0。任何改动的底线是不低于这组数字，且跳过项不得减少。
+预期：Restore → Build（全 TFM，非增量）→ Pack 8 包 → 测试全绿，**460 项通过（126 单元 + 334 集成），16 项跳过**，退出码 0（第 2 轮后；第 1 轮基线为 454 = 124 + 330）。任何改动的底线是不低于这组数字，且跳过项不得减少。
 
 只跑受影响的子集时，与本轮改动相关的过滤器：
 
 ```powershell
 dotnet test tests\Sharp.OpenIddict.Stores.IntegrationTests -c Release --filter "FullyQualifiedName~SqlAssetTests"
 dotnet test tests\Sharp.OpenIddict.Stores.IntegrationTests -c Release --filter "FullyQualifiedName~SchemaConsistencyTests"
+dotnet test tests\Sharp.OpenIddict.Stores.IntegrationTests -c Release --filter "FullyQualifiedName~SchemaVersionContractTests"
 dotnet test tests\Sharp.OpenIddict.Stores.IntegrationTests -c Release --filter "FullyQualifiedName~ParameterBindingContractTests"
+dotnet test tests\Sharp.OpenIddict.Stores.Tests -c Release --filter "FullyQualifiedName~OracleAndDmDialectTests"
+dotnet test tests\Sharp.OpenIddict.Stores.Tests -c Release --filter "FullyQualifiedName~PostgreSqlDialectTests"
 dotnet test tests\Sharp.OpenIddict.Stores.Tests -c Release --filter "FullyQualifiedName~SqlToolTests"
 ```
 
 注意：改动任何 `Sql/**/*.sql.template` 后必须同步该 provider `manifest.json` 里的 `sha256`，否则 `SqlAssetTests` 会失败；`scripts/verify.ps1` 的打包先于测试，正是为了让包资产测试看到本次改动后的字节。
+
+---
+
+## 第 2 轮：2026-10-23 第 1 轮待修项修复
+
+- 触发：用户要求按第 1 轮的待修清单修复。
+- 范围：第 1 轮 8 条待修中的 5 条（1、2、3、4、6）；第 7 条第 1 轮已顺手修掉，第 5 项（SqlTool 升级路径）与第 8 项（Oracle/MySQL 真库）按原文保留不修。
+- 基线：`pwsh ./scripts/verify.ps1` 全绿，**460 项通过（126 单元 + 334 集成），16 项跳过**，退出码 0。
+
+### 已修（本轮）
+
+| # | 问题 | 位置 | 严重度 | 证据 |
+| --- | --- | --- | --- | --- |
+| 1 | 达梦 `CASE_SENSITIVE=0` 静默腐化 | `IOpenIddictStoreStartupProbe` + `OpenIddictStoreDmDialectBase` + 版本校验器 | 阻断 | 4 项新测试；回退调用确认 3 项失败 |
+| 2 | 达梦 MySQL 兼容模式无验收 | `DmMySqlCompatibleStoreContractTests` + 两个 secrets 键 | 重大 | 15 项如实跳过（非通过） |
+| 3 | PostgreSQL 摘要列无宽度约束 | `PostgreSql/.../v0001.sql.template` 四列 | 中等 | 新增测试；删约束确认失败 |
+| 4 | 标识符上限"字符"注释 | MySQL / SQL Server 方言 | 轻微 | 仅注释，编译通过 |
+| 6 | `BuildPaging` count=0 未入契约 | `IOpenIddictStoreDialect.cs` | 轻微 | 仅注释 |
+| — | 解析器把表体注释当列（修 3 暴露） | `SchemaConsistencyTests.Parse` | 中等 | 27 项全绿 |
+| 8 | MySQL/MariaDB 缺验收套件（复核发现） | `ServerAcceptanceTests` 两个新套件 + csproj | 重大 | 30 项如实跳过 |
+
+逐条说明：
+
+**1. 达梦启动探针（阻断）。** 第 1 轮建议在版本校验器里加探针，实际实现抽出了 `IOpenIddictStoreStartupProbe` 接口：只有无法把精确比较强制进谓词的方言才实现它，其余五方言保持零额外查询（有测试锁定两侧）。探针 `FROM` 源用 `{prefix}SchemaVersions` 而非 `DUAL`——版本表刚被读过，必然存在、可读、单行，不依赖兼容模式下目录对象的可见性与授权（达梦社区有 `SYS.SYSDUAL2` 权限报错的实例）。失败抛**新类型** `OpenIddictStoreServerConfigurationException`，因为重跑脚本无用、必须重建实例；复用版本异常会把运维引向错误的排查方向。探针与版本校验共享成功缓存，每库每进程一次往返。
+
+**2. 达梦 MySQL 兼容模式（重大，用户选择补证据）。** 新增与另两模式同构的 15 项套件，secrets 键 `DmMySql`/`DmMySqlSchema`。本地无服务端，15 项**如实跳过**——已确认是跳过而非通过，避免"有套件=已验收"的误读。`Sql/README.md` 的两个 blocker 对该模式保持未关闭。
+
+**3. PostgreSQL 摘要列（中等）。** 四列各加命名 CHECK `octet_length(...) = 32`，摘要同步。修这条时暴露了一个测试基础设施缺陷：`SchemaConsistencyTests` 的解析器把表体内的整行注释当成列声明，于是新增的说明注释被解析成 `ApplicationRedirectUris.so`、`unlike`、`which` 等假列。修的是解析器（剥掉整行注释），不是把注释挪出表体——模板里写注释是合法的，解析器本该处理。
+
+**4/6. 两处注释（轻微）。** 按第 1 轮建议只改注释：标识符上限按字节计量、对非 ASCII 前缀是故意保守；`BuildPaging` 契约补上 count=0 可抛 `NotSupportedException`，并指明调用方已用 `1 = 0` 谓词满足它。不引入计量单位枚举，不实现 SqlTool 升级路径。
+
+**8. MySQL/MariaDB 验收套件（重大，复核第 1 轮记录时发现）。** 第 1 轮把"MySQL 无真库验收"记为"没跑"，复核发现是"没有可跑的东西"：无套件、csproj 无 `MySqlConnector`、`AcceptanceServers` 无键。补 `MySqlStoreContractTests`/`MariaDbStoreContractTests` 各 15 项 + 两个 secrets 键。共用管线不共用事实清单——两个 server 条目指向同一份模板，共用事实会让"跑了一个=两个都验过"成为默认假设；每个套件还断言自己跑在哪个引擎上（`VERSION()` 含 `MariaDB` 必须与声明一致），否则"两个独立验收条目"只是文档里的话。
+
+### 仍待修
+
+- 第 5 项（SqlTool 升级路径）：系列 1 是首个系列，没有升级脚本；等系列 2 再实现。
+- 第 8 项（Oracle/MySQL 真库）：本地不连接数据库服务端的约束不变。**第 2 轮已把缺的套件补齐**（MySQL/MariaDB 各 15 项、达梦 MySQL 兼容 15 项，均如实跳过），现在这三项都是"有东西待跑"，只等用户提供连接串。

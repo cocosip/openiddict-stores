@@ -38,7 +38,12 @@ public interface IOpenIddictStoreDialect
     /// <param name="parameterName">The parameter name without the prefix.</param>
     string BuildExactStringEquals(string column, string parameterName);
 
-    /// <summary>Builds the paging clause; when offset is present and count is null, the correct row count must still be returned.</summary>
+    /// <summary>
+    /// Builds the paging clause; when offset is present and count is null, the correct row count must still be
+    /// returned. A count of 0 may be rejected with <see cref="NotSupportedException"/>: SQL Server's
+    /// <c>FETCH NEXT 0 ROWS</c> is a syntax error, so callers must handle <c>Take(0)</c> before building SQL
+    /// (the query builder expresses it as an unsatisfiable predicate).
+    /// </summary>
     string BuildPaging(int? count, int? offset);
 
     /// <summary>

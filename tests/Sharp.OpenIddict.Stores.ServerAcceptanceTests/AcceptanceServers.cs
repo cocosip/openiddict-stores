@@ -22,6 +22,12 @@ internal static class AcceptanceServers
     /// <summary>The secret holding the PostgreSQL connection string.</summary>
     public const string PostgreSql = "PostgreSql";
 
+    /// <summary>The secret holding the MySQL 8.0 connection string.</summary>
+    public const string MySql = "MySql";
+
+    /// <summary>The secret holding the MariaDB 10.6 connection string.</summary>
+    public const string MariaDb = "MariaDb";
+
     /// <summary>The secret holding the Oracle connection string (SID targets use the full descriptor).</summary>
     public const string Oracle = "Oracle";
 
@@ -36,6 +42,12 @@ internal static class AcceptanceServers
 
     /// <summary>The secret holding the schema the DM8 Oracle-compatible tables are installed into.</summary>
     public const string DmOracleSchema = "DmOracleSchema";
+
+    /// <summary>The secret holding the DM8 MySQL-compatible-mode connection string.</summary>
+    public const string DmMySql = "DmMySql";
+
+    /// <summary>The secret holding the schema the DM8 MySQL-compatible tables are installed into.</summary>
+    public const string DmMySqlSchema = "DmMySqlSchema";
 
     private static readonly Lazy<IReadOnlyDictionary<string, string>> Secrets = new(LoadSecrets);
 

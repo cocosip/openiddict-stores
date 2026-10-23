@@ -263,16 +263,86 @@ public sealed class SchemaVersionContractTests : IAsyncLifetime
         Assert.Equal(0L, (long)(await command.ExecuteScalarAsync())!);
     }
 
+    /// <summary>
+    /// A dialect that cannot force exact comparison into its predicate — DM8, where case sensitivity is fixed at
+    /// database-creation time and invisible to the runtime — declares a startup probe. When the probe reports an
+    /// unsupported instance the store must refuse to run, because the alternative is silently matching the wrong
+    /// row (design 16.1.1).
+    /// </summary>
+    [Fact]
+    public async Task StartupProbe_ThatReportsAnUnsupportedInstance_RefusesTheDatabase()
+    {
+        await InstallAsync();
+
+        var store = CreateStore(probe: new ProbeDialect(unsupported: true));
+
+        var exception = await Assert.ThrowsAsync<OpenIddictStoreServerConfigurationException>(
+            () => store.CountAsync(default).AsTask());
+
+        // The operator must be told which setting to change, and that the store will not degrade instead.
+        Assert.Contains("CASE_SENSITIVE", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("will not fall back", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StartupProbe_ThatReportsASupportedInstance_IsAccepted()
+    {
+        await InstallAsync();
+
+        var store = CreateStore(probe: new ProbeDialect(unsupported: false));
+
+        Assert.Equal(0, await store.CountAsync(default));
+    }
+
+    /// <summary>
+    /// The probe is part of the cached verification, not a per-operation check: once it has passed, dropping
+    /// even the objects it read must not trigger it again.
+    /// </summary>
+    [Fact]
+    public async Task StartupProbe_RunsOnlyWithTheCachedVerification()
+    {
+        await InstallAsync();
+
+        var dialect = new ProbeDialect(unsupported: false);
+        var store = CreateStore(probe: dialect);
+
+        await store.CountAsync(default);
+        await store.CountAsync(default);
+
+        Assert.Equal(1, dialect.ProbeQueriesBuilt);
+    }
+
+    /// <summary>
+    /// The probe is a separate failure from a wrong schema: the tables are fine, the server is not. Reporting it
+    /// as a version mismatch would send the operator looking for a script that cannot fix anything.
+    /// </summary>
+    [Fact]
+    public async Task StartupProbe_IsNotReportedAsASchemaVersionFailure()
+    {
+        await InstallAsync();
+
+        var store = CreateStore(probe: new ProbeDialect(unsupported: true));
+
+        var exception = await Record.ExceptionAsync(() => store.CountAsync(default).AsTask());
+
+        Assert.NotNull(exception);
+        Assert.IsNotType<OpenIddictStoreSchemaVersionException>(exception);
+    }
+
     private OpenIddictStoreApplicationStore<OpenIddictStoreApplication> CreateStore(
-        string prefix = "OpenIddict", string? connectionString = null)
+        string prefix = "OpenIddict", string? connectionString = null, IOpenIddictStoreStartupProbe? probe = null)
     {
         var options = Options.Create(new OpenIddictStoreOptions { TablePrefix = prefix });
         options.Value.Providers.Add(OpenIddictStoreProvider.Sqlite);
 
+        IOpenIddictStoreDialect dialect = probe is null
+            ? OpenIddictStoreSqliteDialect.Instance
+            : new ProbingSqliteDialect(probe);
+
         return new OpenIddictStoreApplicationStore<OpenIddictStoreApplication>(
             options,
             new SqliteConnectionFactory(connectionString ?? _connectionString),
-            OpenIddictStoreSqliteDialect.Instance,
+            dialect,
             NullLogger<OpenIddictStoreApplicationStore<OpenIddictStoreApplication>>.Instance);
     }
 
@@ -303,5 +373,55 @@ public sealed class SchemaVersionContractTests : IAsyncLifetime
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
         await command.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>
+    /// A probe whose verdict is chosen by the test. The SQL runs on SQLite, so the guard's plumbing — ordering
+    /// against the version check, caching, and exception type — is exercised for real rather than mocked.
+    /// </summary>
+    private sealed class ProbeDialect(bool unsupported) : IOpenIddictStoreStartupProbe
+    {
+        /// <summary>How many times the guard asked for (and therefore executed) the probe.</summary>
+        public int ProbeQueriesBuilt { get; private set; }
+
+        public string BuildProbeSql(string versionsTable)
+        {
+            ProbeQueriesBuilt++;
+
+            return unsupported
+                ? $"SELECT 1 FROM {versionsTable}"
+                : $"SELECT CASE WHEN 'abc' = 'ABC' THEN 1 ELSE 0 END FROM {versionsTable}";
+        }
+
+        public string ProbeFailureMessage =>
+            "The instance folds case in string comparisons (CASE_SENSITIVE=0); exact string comparison requires " +
+            "CASE_SENSITIVE=1, and this store will not fall back to an inexact comparison.";
+    }
+
+    /// <summary>The SQLite dialect plus a probe: a dialect only becomes a probe target by opting in.</summary>
+    private sealed class ProbingSqliteDialect(IOpenIddictStoreStartupProbe probe)
+        : IOpenIddictStoreDialect, IOpenIddictStoreStartupProbe
+    {
+        private readonly IOpenIddictStoreDialect _inner = OpenIddictStoreSqliteDialect.Instance;
+
+        public OpenIddictStoreProvider Provider => _inner.Provider;
+        public string ParameterPrefix => _inner.ParameterPrefix;
+        public int MaximumParameters => _inner.MaximumParameters;
+        public int MaximumIdentifierLength => _inner.MaximumIdentifierLength;
+        public string QuoteIdentifier(string identifier) => _inner.QuoteIdentifier(identifier);
+        public string BuildExactStringEquals(string column, string parameterName)
+            => _inner.BuildExactStringEquals(column, parameterName);
+        public string BuildPaging(int? count, int? offset) => _inner.BuildPaging(count, offset);
+        public object? FormatDate(DateTime? value) => _inner.FormatDate(value);
+        public DateTime? ReadDate(System.Data.Common.DbDataReader reader, int ordinal)
+            => _inner.ReadDate(reader, ordinal);
+        public string BuildExactStringNotEqualsIncludingNull(string column, string parameterName)
+            => _inner.BuildExactStringNotEqualsIncludingNull(column, parameterName);
+        public string BuildExactStringColumnEquals(string left, string right)
+            => _inner.BuildExactStringColumnEquals(left, right);
+        public bool EmptyStringBindsAsNull => _inner.EmptyStringBindsAsNull;
+
+        public string BuildProbeSql(string versionsTable) => probe.BuildProbeSql(versionsTable);
+        public string ProbeFailureMessage => probe.ProbeFailureMessage;
     }
 }

@@ -226,6 +226,30 @@ public sealed class PostgreSqlDialectTests
         Assert.Contains("\"ConcurrencyToken\" varchar(50) COLLATE \"C\"", template, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// <c>bytea</c> is variable length, unlike the <c>binary(32)</c>/<c>varbinary(32)</c>/<c>raw(32)</c> the other
+    /// providers use, so PostgreSQL is the only provider where a digest row of the wrong length can exist at all.
+    /// Such a row is permanently unreachable — the candidate lookup always compares against a 32-byte SHA-256 —
+    /// so the auxiliary index and the authoritative JSON would disagree with no error anywhere (design 15.3).
+    /// </summary>
+    [Fact]
+    public void InstallTemplate_ConstrainsEveryDigestColumnToTheSha256Width()
+    {
+        var template = File.ReadAllText(Path.Combine(
+            RepositoryRoot, "src", "Sharp.OpenIddict.Stores.PostgreSql", "Sql", "1", "install", "v0001.sql.template"));
+
+        foreach (var (column, tables) in new[] { ("UriHash", 2), ("ScopeHash", 1), ("ResourceHash", 1) })
+        {
+            // UriHash is declared in both URI auxiliary tables; the other two have one table each.
+            Assert.Equal(tables, Regex.Matches(template, $@"""{column}"" bytea NOT NULL").Count);
+
+            Assert.Contains($"CHECK (octet_length(\"{column}\") = 32)", template, StringComparison.Ordinal);
+        }
+
+        // Four digest columns, four checks: the count catches a constraint dropped from one table.
+        Assert.Equal(4, Regex.Matches(template, @"octet_length\(""(\w+Hash)""\) = 32").Count);
+    }
+
     private static string RepositoryRoot { get; } = LocateRepositoryRoot();
 
     private static string LocateRepositoryRoot()

@@ -32,7 +32,12 @@ public sealed class OpenIddictStoreMySqlDialect : IOpenIddictStoreDialect
     public int MaximumParameters => 65_000;
 
     /// <inheritdoc />
-    /// <remarks>MySQL allows 64 characters for identifiers and refuses longer names instead of truncating them.</remarks>
+    /// <remarks>
+    /// MySQL allows 64 characters for identifiers and refuses longer names instead of truncating them. The
+    /// check is applied in bytes (<see cref="OpenIddictStoreIdentifiers.ValidateLength"/>), which is a
+    /// deliberately conservative limit for a non-ASCII prefix: it rejects some names MySQL would accept rather
+    /// than risk one MySQL silently truncates. Rejection is the safe direction (design 15.4).
+    /// </remarks>
     public int MaximumIdentifierLength => 64;
 
     /// <inheritdoc />

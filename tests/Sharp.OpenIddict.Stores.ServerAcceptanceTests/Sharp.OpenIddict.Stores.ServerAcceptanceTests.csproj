@@ -10,7 +10,7 @@
   <PropertyGroup>
     <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
-    <Description>Real-server acceptance runs for PostgreSQL, Oracle, and DM8, configured through user-secrets and executed explicitly.</Description>
+    <Description>Real-server acceptance runs for PostgreSQL, MySQL, MariaDB, Oracle, and DM8, configured through user-secrets and executed explicitly.</Description>
     <UserSecretsId>OpenIddictStoresServerAcceptance</UserSecretsId>
   </PropertyGroup>
 
@@ -32,6 +32,7 @@
   <!-- Only the drivers the configured servers need; none of these flow into any shipped package. -->
   <ItemGroup>
     <PackageReference Include="Npgsql" />
+    <PackageReference Include="MySqlConnector" />
     <PackageReference Include="Oracle.ManagedDataAccess.Core" />
     <PackageReference Include="DM.DmProvider" />
   </ItemGroup>
@@ -40,6 +41,7 @@
     <ProjectReference Include="..\..\src\Sharp.OpenIddict.Stores\Sharp.OpenIddict.Stores.csproj" />
     <ProjectReference Include="..\..\src\Sharp.OpenIddict.Stores.Models\Sharp.OpenIddict.Stores.Models.csproj" />
     <ProjectReference Include="..\..\src\Sharp.OpenIddict.Stores.PostgreSql\Sharp.OpenIddict.Stores.PostgreSql.csproj" />
+    <ProjectReference Include="..\..\src\Sharp.OpenIddict.Stores.MySql\Sharp.OpenIddict.Stores.MySql.csproj" />
     <ProjectReference Include="..\..\src\Sharp.OpenIddict.Stores.Oracle\Sharp.OpenIddict.Stores.Oracle.csproj" />
     <ProjectReference Include="..\..\src\Sharp.OpenIddict.Stores.Dm\Sharp.OpenIddict.Stores.Dm.csproj" />
   </ItemGroup>

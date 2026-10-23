@@ -348,7 +348,8 @@ public sealed class SchemaConsistencyTests
         foreach (Match match in Regex.Matches(template,
                      @"CREATE TABLE\s+\S*?__PREFIX__(?<table>\w+)[""\]`]?\s*\("))
         {
-            var body = ReadBalancedExpression(template, match);
+            // A comment inside the body is legitimate SQL a DBA reads; it must not parse as phantom columns.
+            var body = StripWholeLineComments(ReadBalancedExpression(template, match));
             var columns = new List<Column>();
 
             foreach (var raw in SplitTopLevel(body))
@@ -425,6 +426,15 @@ public sealed class SchemaConsistencyTests
 
         throw new InvalidOperationException("Unbalanced parentheses in the install template.");
     }
+
+    /// <summary>
+    /// Removes whole-line <c>--</c> comments from a table body. Templates may document a column or a constraint
+    /// inline (PostgreSQL's digest CHECK does), and a comment is not a declaration: without this, every word of
+    /// the comment would be parsed as a column name.
+    /// </summary>
+    private static string StripWholeLineComments(string body)
+        => string.Join("\n", body.Split('\n')
+            .Where(line => !line.TrimStart().StartsWith("--", StringComparison.Ordinal)));
 
     /// <summary>Splits a table body on commas that separate column/constraint definitions.</summary>
     private static IEnumerable<string> SplitTopLevel(string body)

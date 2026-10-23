@@ -14,6 +14,11 @@ namespace Sharp.OpenIddict.Stores;
 /// failure is never cached: the next attempt re-reads the table, because the operator may have just run
 /// the required script. No DDL is ever issued here.
 /// </summary>
+/// <remarks>
+/// A dialect that cannot force the exact-comparison contract into its predicates also gets one startup probe
+/// (<see cref="IOpenIddictStoreStartupProbe"/>), run in the same batch as the version check and cached with it.
+/// A wrong instance-level setting then becomes a clear refusal instead of silently wrong query results.
+/// </remarks>
 internal sealed class OpenIddictStoreSchemaVersionGuard
 {
     // Success-only, keyed by dialect + version table + connection-string digest: rotating a factory to a
@@ -93,7 +98,49 @@ internal sealed class OpenIddictStoreSchemaVersionGuard
                 $"version {OpenIddictStoreSchema.RequiredVersion}. {RequiredMessage()}");
         }
 
+        await VerifyServerConfigurationAsync(cancellationToken).ConfigureAwait(false);
+
         VerifiedDatabases.TryAdd(cacheKey, true);
+    }
+
+    /// <summary>
+    /// Runs the dialect's startup probe, if it has one, and refuses the database when the server's
+    /// instance-level configuration would break a guarantee the predicates cannot repair (design 16.1.1).
+    /// It runs only on the first use of a database — a successful verification is cached as a whole — so the
+    /// probe never adds a round-trip to a later operation.
+    /// </summary>
+    private async ValueTask VerifyServerConfigurationAsync(CancellationToken cancellationToken)
+    {
+        if (_dialect is not IOpenIddictStoreStartupProbe probe)
+        {
+            return;
+        }
+
+        await using var session = await OpenIddictStoreSession
+            .CreateAsync(_connectionFactory, _dialect, _schema, _commandTimeout, cancellationToken)
+            .ConfigureAwait(false);
+
+        long unsupported;
+
+        try
+        {
+            unsupported = await session
+                .ExecuteScalarAsync<long>(probe.BuildProbeSql(_schema.VersionsTableName(_dialect)), null, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (DbException exception)
+        {
+            // The probe is a plain SELECT over constants, so a provider error here means the server refused the
+            // statement itself. Reporting it as a configuration failure would mislabel a driver problem.
+            throw new OpenIddictStoreServerConfigurationException(
+                $"The startup configuration probe for provider '{_dialect.Provider}' could not be evaluated: " +
+                $"{exception.Message}", exception);
+        }
+
+        if (unsupported != 0)
+        {
+            throw new OpenIddictStoreServerConfigurationException(probe.ProbeFailureMessage);
+        }
     }
 
     /// <summary>

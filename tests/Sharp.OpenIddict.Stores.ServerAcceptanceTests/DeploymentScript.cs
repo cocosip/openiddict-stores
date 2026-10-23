@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using Sharp.OpenIddict.Stores;
 using Sharp.OpenIddict.Stores.Dm;
+using Sharp.OpenIddict.Stores.MySql;
 using Sharp.OpenIddict.Stores.Oracle;
 using Sharp.OpenIddict.Stores.PostgreSql;
 
@@ -18,6 +19,15 @@ internal static class DeploymentScript
     public static string PostgreSql(string prefix, string? schema = null)
         => OpenIddictStoreIdentifiers.RenderDeploymentScript(
             Template("PostgreSql"), OpenIddictStorePostgreSqlDialect.Instance, prefix, schema);
+
+    /// <summary>
+    /// Renders the MySQL/MariaDB install script. One physical template serves both servers, so the two suites
+    /// call this with their own connection; the rendered text is identical, which is exactly why the two runs
+    /// have to be recorded separately (design 5, 10.1).
+    /// </summary>
+    public static string MySql(string prefix)
+        => OpenIddictStoreIdentifiers.RenderDeploymentScript(
+            Template("MySql"), OpenIddictStoreMySqlDialect.Instance, prefix);
 
     public static string Oracle(string prefix, string? schema = null)
         => OpenIddictStoreIdentifiers.RenderDeploymentScript(

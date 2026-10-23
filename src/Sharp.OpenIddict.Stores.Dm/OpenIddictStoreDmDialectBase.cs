@@ -14,9 +14,11 @@ namespace Sharp.OpenIddict.Stores.Dm;
 /// initialized with the default <c>CASE_SENSITIVE=1</c>, and the modes do not change that on their own. An
 /// instance created with <c>CASE_SENSITIVE=0</c> folds case in comparisons and violates the exact-match
 /// contract no matter which mode it runs, so that prerequisite is a deployment requirement recorded in every
-/// mode's script and README rather than something a predicate could repair portably (design 16.1.1).
+/// mode's script and README (design 16.1.1). Because DM8 offers no predicate that could force the semantics
+/// and no view that exposes the setting, the requirement is enforced by a startup probe
+/// (<see cref="IOpenIddictStoreStartupProbe"/>) instead of being trusted.
 /// </remarks>
-public abstract class OpenIddictStoreDmDialectBase : IOpenIddictStoreDialect
+public abstract class OpenIddictStoreDmDialectBase : IOpenIddictStoreDialect, IOpenIddictStoreStartupProbe
 {
     /// <inheritdoc />
     public OpenIddictStoreProvider Provider => OpenIddictStoreProvider.Dm;
@@ -99,6 +101,32 @@ public abstract class OpenIddictStoreDmDialectBase : IOpenIddictStoreDialect
     /// only the Oracle-compatible mode converts empty strings to NULL, and that mode's dialect overrides this.
     /// </remarks>
     public virtual bool EmptyStringBindsAsNull => false;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// <para>
+    /// DM8 has no predicate that pins the comparison to a binary sort the way <c>COLLATE</c>, <c>BINARY</c>, and
+    /// <c>NLSSORT</c> do elsewhere, and <c>CASE_SENSITIVE</c> is fixed at database-creation time and absent from
+    /// <c>v$dm_ini</c>. The only way to learn whether the instance folds case is to compare two values, so the
+    /// probe does exactly that: <c>1</c> means the instance cannot honour the exact-match contract.
+    /// </para>
+    /// <para>
+    /// The version table is the <c>FROM</c> source rather than <c>DUAL</c>: the guard has just read a row from it,
+    /// so it exists, is readable, and has exactly one row in every mode — unlike the catalog objects a
+    /// compatibility mode may or may not expose to the connecting user.
+    /// </para>
+    /// </remarks>
+    public string BuildProbeSql(string versionsTable)
+        => $"SELECT CASE WHEN 'abc' = 'ABC' THEN 1 ELSE 0 END FROM {versionsTable}";
+
+    /// <inheritdoc />
+    public string ProbeFailureMessage =>
+        "This DM8 instance was initialized with CASE_SENSITIVE=0, so it folds case in string comparisons and " +
+        "cannot honour the exact-match contract (design 16.1.1): FindByClientId, FindByName, FindByReferenceId, " +
+        "and FindBySubject would silently match the wrong row. CASE_SENSITIVE is fixed when the database is " +
+        "created and cannot be changed afterwards, and no compatibility mode overrides it. Re-create the " +
+        "database with CASE_SENSITIVE=1 and run the install script again; this store will not fall back to an " +
+        "inexact comparison.";
 
     /// <inheritdoc />
     public abstract string BuildPaging(int? count, int? offset);

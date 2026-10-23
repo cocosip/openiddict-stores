@@ -58,8 +58,11 @@ accidental re-run on a populated schema is refused.
   `DateTimeKind.Utc` on read.
 - **No filtered unique index.** Unlike SQL Server, PostgreSQL treats NULLs as distinct in a unique index, so
   many NULL `ClientId`/`Name`/`ReferenceId` values are allowed without a `WHERE ... IS NOT NULL` clause.
-- **Digest columns are `bytea`.** The store writes exactly 32 bytes; the width is checked by the caller's
-  SHA-256, not enforced by a column type, so a manual insert can store a different length.
+- **Digest columns are `bytea` with a `CHECK (octet_length(...) = 32)`.** PostgreSQL has no fixed-width binary
+  type, so the SHA-256 width that `binary(32)`/`varbinary(32)`/`raw(32)` enforce on the other providers is
+  enforced here by a check constraint. Without it a manually inserted row of any other length would be
+  permanently unreachable: the candidate lookup always compares against a 32-byte hash, so the auxiliary index
+  and the authoritative JSON could disagree with no error anywhere.
 
 ## Verification status
 

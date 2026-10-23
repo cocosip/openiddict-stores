@@ -79,6 +79,21 @@ promise all-or-nothing installation.
 ## Verification status
 
 The template, rendering rules, paging, the `BINARY` predicates, date binding, and identifier limits are covered
-by unit tests (`MySqlDialectTests`) that do not need a server. **Real-database installation has not been executed
-in this repository** (see `docs/development.md`, E-028): the acceptance suite is expected to be run against
-separate MySQL 8.0 and MariaDB 10.6 instances before this provider is declared supported.
+by unit tests (`MySqlDialectTests`) that do not need a server.
+
+**Real-database installation has not been executed in this repository** (see `docs/development.md`, E-028), so
+every server-only claim above is unverified. The run that closes this gap now exists:
+
+| Suite | Manifest entry | Secret keys |
+| --- | --- | --- |
+| `MySqlStoreContractTests` | `MySQL` (8.0+) | `MySql` |
+| `MariaDbStoreContractTests` | `MariaDB` (10.6+) | `MariaDb` |
+
+Both live in `tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests/` (deliberately outside the solution) and each
+declares the same 15 facts: install script and version row, re-run refusal, Unicode and 50 000-character values,
+microsecond `datetime(6)` round-trips, `BINARY` exact comparison including case, accents, and trailing spaces,
+the unique keys treating NULLs as distinct, CAS updates, `LIMIT`/`OFFSET` paging including an offset without a
+count, associated deletes, bulk revocation with a NULL status, and prune. Each suite also asserts it is running
+on its own engine — a MariaDB server fails the MySQL suite and vice versa — because the two share one template
+but are separate acceptance entries. With the secrets unset every fact reports itself as skipped, so a missing
+run stays visible instead of looking like a pass.

@@ -13,6 +13,8 @@
 --   byte-wise, so case, accents, and trailing spaces stay significant whatever the database default is;
 --   the dialect can then use a plain = and still match the design 16.1.1 contract.
 -- Deletion: every foreign key is NO ACTION; the Store performs the associated deletes explicitly (design 16.2.1).
+-- Digest width: the auxiliary digest columns are bytea, which PostgreSQL does not constrain by length the way
+--   binary(32)/varbinary(32)/raw(32) do elsewhere, so each carries a CHECK on octet_length = 32 (design 15.3).
 -- Re-run behaviour: there is no IF EXISTS skip. A second run fails on the first duplicate relation and the
 --   transaction rolls back, which is how an accidental re-run is refused (design 10.3).
 
@@ -93,6 +95,10 @@ CREATE TABLE __SCHEMA__"__PREFIX__ApplicationRedirectUris" (
     "Uri" text COLLATE "C" NOT NULL,
     "Position" integer NOT NULL,
     CONSTRAINT "PK___PREFIX__AppRedirectUris" PRIMARY KEY ("ApplicationId", "Position"),
+    -- bytea is variable length, unlike the binary(32)/varbinary(32)/raw(32) the other providers use, so the
+    -- SHA-256 width is enforced here: a row whose digest is any other length can never be reached by the
+    -- candidate lookup, which always compares against a 32-byte hash (design 15.3, 15.5).
+    CONSTRAINT "CK___PREFIX__AppRedirectUris_UriHash" CHECK (octet_length("UriHash") = 32),
     CONSTRAINT "FK___PREFIX__AppRedirectUris_App"
         FOREIGN KEY ("ApplicationId") REFERENCES __SCHEMA__"__PREFIX__Applications" ("Id")
 );
@@ -103,6 +109,7 @@ CREATE TABLE __SCHEMA__"__PREFIX__ApplicationPostLogoutRedirectUris" (
     "Uri" text COLLATE "C" NOT NULL,
     "Position" integer NOT NULL,
     CONSTRAINT "PK___PREFIX__AppPostLogoutUris" PRIMARY KEY ("ApplicationId", "Position"),
+    CONSTRAINT "CK___PREFIX__AppPostLogoutUris_UriHash" CHECK (octet_length("UriHash") = 32),
     CONSTRAINT "FK___PREFIX__AppPostLogoutUris_App"
         FOREIGN KEY ("ApplicationId") REFERENCES __SCHEMA__"__PREFIX__Applications" ("Id")
 );
@@ -113,6 +120,7 @@ CREATE TABLE __SCHEMA__"__PREFIX__AuthorizationScopes" (
     "Scope" text COLLATE "C" NOT NULL,
     "Position" integer NOT NULL,
     CONSTRAINT "PK___PREFIX__AuthScopes" PRIMARY KEY ("AuthorizationId", "Position"),
+    CONSTRAINT "CK___PREFIX__AuthScopes_ScopeHash" CHECK (octet_length("ScopeHash") = 32),
     CONSTRAINT "FK___PREFIX__AuthScopes_Authz"
         FOREIGN KEY ("AuthorizationId") REFERENCES __SCHEMA__"__PREFIX__Authorizations" ("Id")
 );
@@ -123,6 +131,7 @@ CREATE TABLE __SCHEMA__"__PREFIX__ScopeResources" (
     "Resource" text COLLATE "C" NOT NULL,
     "Position" integer NOT NULL,
     CONSTRAINT "PK___PREFIX__ScopeResources" PRIMARY KEY ("ScopeId", "Position"),
+    CONSTRAINT "CK___PREFIX__ScopeResources_ResourceHash" CHECK (octet_length("ResourceHash") = 32),
     CONSTRAINT "FK___PREFIX__ScopeResources_Scope"
         FOREIGN KEY ("ScopeId") REFERENCES __SCHEMA__"__PREFIX__Scopes" ("Id")
 );
