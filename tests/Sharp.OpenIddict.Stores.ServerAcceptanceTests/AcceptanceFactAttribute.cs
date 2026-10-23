@@ -4,34 +4,35 @@ using Xunit;
 namespace Sharp.OpenIddict.Stores.ServerAcceptance;
 
 /// <summary>
-/// A fact that only runs when the server it needs is configured in the user-secrets store. Without the
-/// secret the test is reported as skipped with the reason, so a missing server stays visible in the run
-/// instead of looking like a pass.
+/// A fact that only runs when this run is configured for the server it needs. Without that configuration the
+/// test is reported as skipped with the reason and the fix, so a missing server stays visible in the run
+/// instead of looking like a pass (design 11).
 /// </summary>
 public class AcceptanceFactAttribute : FactAttribute
 {
     public AcceptanceFactAttribute(string key, string description)
     {
-        if (!AcceptanceServers.IsConfigured(key))
+        var reason = AcceptanceServers.Unavailable(key);
+
+        if (reason is not null)
         {
-            Skip = $"{description} needs the '{key}' connection string in user-secrets " +
-                   $"(dotnet user-secrets --id {AcceptanceServers.SecretsId}).";
+            Skip = $"{description} {reason}";
         }
     }
 }
 
 /// <summary>
-/// A DM8 acceptance fact. Besides the configured server it refuses to run where the driver cannot be real:
-/// <c>DM.DmProvider</c> ships no net10 asset, so on a net10 host the run would silently exercise the
-/// netstandard fallback instead of the driver's own net8.0 asset (design 5.1).
+/// A fact for a driver that ships no net10 asset. <c>Microsoft.Data.SqlClient</c> 7.1.1 and
+/// <c>DM.DmProvider</c> 8.3.1 stop at net9.0, so a net10 host would silently exercise the netstandard/net9
+/// fallback and a green result would not be evidence for the declared target (design 5.1).
 /// </summary>
-public sealed class DmAcceptanceFactAttribute : AcceptanceFactAttribute
+public class Net8HostAcceptanceFactAttribute : AcceptanceFactAttribute
 {
-    public DmAcceptanceFactAttribute(string key, string description) : base(key, description)
+    public Net8HostAcceptanceFactAttribute(string key, string description) : base(key, description)
     {
         if (Skip is null && Environment.Version.Major > 9)
         {
-            Skip = $"{description} must run on a net8.0 host: DM.DmProvider ships no net10 asset.";
+            Skip = $"{description} must run on a net8.0 host: this provider's driver ships no net10 asset (design 5.1).";
         }
     }
 }

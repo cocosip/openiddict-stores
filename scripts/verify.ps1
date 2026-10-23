@@ -1,12 +1,13 @@
 # Sharp.OpenIddict.Stores — local verification gates (CI-01)
 #
 # Runs every check that can be executed without a database server: restore, Release build for all five
-# target frameworks, unit and integration tests (SQLite runs for real, the server suites skip honestly), the
-# package asset checks, and the SQL manifest/digest checks. Every step fails the script, so a gate cannot be
-# "passed" by swallowing an exit code.
+# target frameworks, unit and integration tests (SQLite runs for real; nothing in the solution needs a
+# server), the package asset checks, and the SQL manifest/digest checks. Every step fails the script, so a
+# gate cannot be "passed" by swallowing an exit code.
 #
 # Deliberately not here: any database server. Installing or connecting to one is out of scope by the user's
-# instruction, so the server-backed acceptance stays in CI-02 on a dedicated environment.
+# instruction. Real-database acceptance lives in tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests, a
+# project outside the solution that switches targets through its own databases.json and is invoked directly.
 #
 # Usage:  pwsh ./scripts/verify.ps1 [-SkipPack]
 #
@@ -89,7 +90,7 @@ try {
         }
     }
 
-    Invoke-Step 'Tests (unit + integration; SQLite runs, server suites skip)' {
+    Invoke-Step 'Tests (unit + integration; SQLite runs for real)' {
         dotnet test $solution -c Release --no-build
     }
 

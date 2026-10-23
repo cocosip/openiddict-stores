@@ -1,27 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Standalone real-server acceptance harness. Deliberately NOT part of Sharp.OpenIddict.Stores.slnx and
-    never touched by CI: it runs only when invoked explicitly, and only after connection strings have been
-    placed in the dotnet user-secrets store (id OpenIddictStoresServerAcceptance). Nothing here is a unit
-    test; with no secrets configured every fact reports itself as skipped with the reason.
+    The one real-database acceptance harness for every supported provider. Deliberately NOT part of
+    Sharp.OpenIddict.Stores.slnx and never touched by CI: it runs only when invoked explicitly, and only for
+    the providers selected in databases.json (SQLite needs no configuration at all). Nothing here is a unit
+    test; an unconfigured provider reports itself as skipped with the reason and the fix.
     Packages come from the central Directory.Packages.props like every other project in the repository.
   -->
   <PropertyGroup>
     <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
-    <Description>Real-server acceptance runs for PostgreSQL, MySQL, MariaDB, Oracle, and DM8, configured through user-secrets and executed explicitly.</Description>
-    <UserSecretsId>OpenIddictStoresServerAcceptance</UserSecretsId>
+    <Description>Real-database acceptance runs for every supported provider, selected through databases.json and executed explicitly.</Description>
   </PropertyGroup>
-
-  <ItemGroup>
-    <!-- The in-box secrets reader resolves the store through this metadata; the dotnet CLI writes the
-         secrets.json next to it under the user profile. -->
-    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
-      <_Parameter1>UserSecretsId</_Parameter1>
-      <_Parameter2>$(UserSecretsId)</_Parameter2>
-    </AssemblyAttribute>
-  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
@@ -31,6 +21,8 @@
 
   <!-- Only the drivers the configured servers need; none of these flow into any shipped package. -->
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
     <PackageReference Include="Npgsql" />
     <PackageReference Include="MySqlConnector" />
     <PackageReference Include="Oracle.ManagedDataAccess.Core" />
@@ -40,8 +32,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Sharp.OpenIddict.Stores\Sharp.OpenIddict.Stores.csproj" />
     <ProjectReference Include="..\..\src\Sharp.OpenIddict.Stores.Models\Sharp.OpenIddict.Stores.Models.csproj" />
+    <ProjectReference Include="..\..\src\Sharp.OpenIddict.Stores.SqlServer\Sharp.OpenIddict.Stores.SqlServer.csproj" />
     <ProjectReference Include="..\..\src\Sharp.OpenIddict.Stores.PostgreSql\Sharp.OpenIddict.Stores.PostgreSql.csproj" />
     <ProjectReference Include="..\..\src\Sharp.OpenIddict.Stores.MySql\Sharp.OpenIddict.Stores.MySql.csproj" />
+    <ProjectReference Include="..\..\src\Sharp.OpenIddict.Stores.Sqlite\Sharp.OpenIddict.Stores.Sqlite.csproj" />
     <ProjectReference Include="..\..\src\Sharp.OpenIddict.Stores.Oracle\Sharp.OpenIddict.Stores.Oracle.csproj" />
     <ProjectReference Include="..\..\src\Sharp.OpenIddict.Stores.Dm\Sharp.OpenIddict.Stores.Dm.csproj" />
   </ItemGroup>

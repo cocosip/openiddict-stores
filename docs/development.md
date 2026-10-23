@@ -8,7 +8,7 @@
 
 截至 2026-10-19，已完成源码调研、正式设计编写及走查问题修订，已提交的设计基线为 `982c156`（v1.2）；此后补齐精确比较、查询 NULL 语义、任务依赖、逐数据库 SQL 脚本的交付、版本与持续维护验收，依赖中央包管理与逐 TFM 版本分线规则，并将实施基线改为唯一稳定版 OpenIddict 7.7.2（不再依赖任何预览包），任务清单相应收敛为四类实体、四类 Store 和单系列多目标验证，设计收敛为 v1.9。代码与测试已整体纳入版本控制（E-025），工作区不再积压未跟踪文件。当前共 50 项任务，**33 项完成**、17 项未完成（另有 MIG-02、REL-02 按设计暂不适用，CI-01 为部分完成未计入）。已完成的包括 3 项文档、BASE-01 依赖锁定、BASE-02 合同清单、ENG-01 工程布局、ENG-02 四类模型、ENG-04 连接与错误处理、ENG-05 共享测试设施、COMPAT-01～04 五目标与包资产、STORE-01～06 SQLite 方言/Store/集合索引/CAS、LIFE-01～04 关联删除与竞态/批量撤销/独立清理、QUERY-01～03 查询翻译、DB-01 SQLite 完整验收、DB-02 SQL Server 方言与真库验收、MIG-01 版本误用检查、MIG-04 结构一致性部分。ENG-03 的配置/DI/四类 Store 注册已可用，但任务描述中的其余成员仍未收尾，故保持未勾选。设计文档状态仍为“设计评审稿”，完成编写不代表用户已经确认设计。
 
-当前仓库已有 `.slnx`、集中构建与包管理文件、8 个产品工程、3 个测试工程和 2 个示例骨架（不提交 `global.json`，见 E-027），可还原、构建、打包，本地通过 453 项测试并如实跳过 16 项需要真实 SQL Server 的用例（121 项单元：工程约束、Store 合同冻结、模型列映射、注册与选项校验、JSON/UTC 转换、六 provider 方言与模板、达梦多模式、SQL 生成工具；332 项集成：SQLite 安装脚本与完整验收、六 provider 脚本结构与资产检查、四类 Store 真库合同、集合索引与 CAS 合同、批量撤销与清理合同、关联删除矩阵与竞态、查询回调翻译、访问器与无截断、包资产与低 TFM 加载、包内 SQL 逐字节一致性、原生 Manager 端到端、连接生命周期与取消、自定义前缀/schema 的安装副本、PostgreSQL 与 MySQL/Oracle/达梦方言与模板渲染）。核心包已具备 Builder/选项/连接工厂/默认实体注册、转换器与四类 Store，四类 Store 已全部注册进 DI，并已验证可经原生 Manager（含非泛型接口）创建、查找与更新；Store 的读写、删除、撤销、清理与 IQueryable 查询回调均已可用。六 provider 的方言与安装脚本模板均已交付，其中 **SQLite（E-035）、PostgreSQL、Oracle、达梦（原生与 Oracle 兼容两种声明模式）有真库验收证据**（E-044），SQL Server、MySQL/MariaDB 与达梦 MySQL 兼容模式待真库验收（E-028）；协议联调按约束暂不实施。2026-10-20 按用户要求新增三项交付：达梦从单一 native 模式扩展为三种声明兼容模式（E-040）、SQL 部署脚本生成工具（E-041）、CI/CD 工作流——分支只构建测试、tag 才打包发布（E-042），并修复了本地门禁"测试先于打包"的顺序缺陷（E-039）；同日按用户提供的数据库服务完成 PostgreSQL/Oracle/达梦（两模式）真库验收，发现并修复安装模板与运行时 SQL 的四处真库缺陷（E-044）。2026-10-21 完成全库代码走查并修复全部缺陷（查询组合/参数上限/空串语义/标识符校验/版本闸门缓存等八类，达梦方言经官方文档复核，E-045）。以下未完成项均为计划，不代表已有可调用功能。
+当前仓库已有 `.slnx`、集中构建与包管理文件、8 个产品工程、3 个测试工程和 2 个示例骨架（不提交 `global.json`，见 E-027），可还原、构建、打包，本地通过 458 项测试、0 项跳过（126 项单元：工程约束、Store 合同冻结、模型列映射、注册与选项校验、JSON/UTC 转换、六 provider 方言与模板、达梦多模式、SQL 生成工具；332 项集成：SQLite 安装脚本与完整验收、六 provider 脚本结构与资产检查、四类 Store 真库合同、集合索引与 CAS 合同、批量撤销与清理合同、关联删除矩阵与竞态、查询回调翻译、访问器与无截断、包资产与低 TFM 加载、包内 SQL 逐字节一致性、原生 Manager 端到端、连接生命周期与取消、自定义前缀/schema 的安装副本、PostgreSQL 与 MySQL/Oracle/达梦方言与模板渲染）。需要真实服务器的用例不在该基线内，全部集中在不进 slnx 的 `tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests`，通过 `databases.json` 切换目标、按配置如实跳过（E-049）。核心包已具备 Builder/选项/连接工厂/默认实体注册、转换器与四类 Store，四类 Store 已全部注册进 DI，并已验证可经原生 Manager（含非泛型接口）创建、查找与更新；Store 的读写、删除、撤销、清理与 IQueryable 查询回调均已可用。六 provider 的方言与安装脚本模板均已交付，其中 **SQLite（E-035）、PostgreSQL、Oracle、达梦（原生与 Oracle 兼容两种声明模式）有真库验收证据**（E-044），SQL Server、MySQL/MariaDB 与达梦 MySQL 兼容模式待真库验收（E-028）；协议联调按约束暂不实施。2026-10-20 按用户要求新增三项交付：达梦从单一 native 模式扩展为三种声明兼容模式（E-040）、SQL 部署脚本生成工具（E-041）、CI/CD 工作流——分支只构建测试、tag 才打包发布（E-042），并修复了本地门禁"测试先于打包"的顺序缺陷（E-039）；同日按用户提供的数据库服务完成 PostgreSQL/Oracle/达梦（两模式）真库验收，发现并修复安装模板与运行时 SQL 的四处真库缺陷（E-044）。2026-10-21 完成全库代码走查并修复全部缺陷（查询组合/参数上限/空串语义/标识符校验/版本闸门缓存等八类，达梦方言经官方文档复核，E-045）。2026-10-23 把两个真库入口（user-secrets 验收项目 + `DSH_SQLSERVER` 集成套件）合并为一个配置可切换的统一入口，并补齐 SQLite 与 SQL Server（E-049）。以下未完成项均为计划，不代表已有可调用功能。
 
 | 阶段 | 任务编号 | 当前状态 | 阶段完成条件 |
 | --- | --- | --- | --- |
@@ -214,11 +214,11 @@ JSON 是集合权威数据；四张辅助表同事务维护，摘要仅筛选候
 
 | 服务器/模式 | Provider | 实现与完整合同 | 驱动/TFM 支持 | 证据编号 |
 | --- | --- | --- | --- | --- |
-| SQL Server 2016+ | SqlServer | 实现与脚本模板已交付；**真库未验证**（E-028：不在本地连接数据库服务端） | 包资产层面已核对；运行时连接未验证 | E-026、E-028 |
+| SQL Server 2016+ | SqlServer | 实现与脚本模板已交付；**真库未验证**（E-028：不在本地连接数据库服务端）；套件已并入统一真库入口，16 项待跑（E-049） | 包资产层面已核对；运行时连接未验证 | E-026、E-028、E-049 |
 | PostgreSQL 14+ | PostgreSql | 实现与脚本模板已交付；**2026-10-20 真库验收通过 15/15**（E-044，用户提供的实例，net8/9/10 三宿主） | 包资产层面已核对；运行时连接已验证 | E-029、E-044 |
-| MySQL 8.0+ | MySql | 实现与脚本模板已交付；**真库未验证**（E-028） | 包资产层面已核对；运行时连接未验证 | E-031 |
-| MariaDB 10.6+ | MySql | 同一份脚本与方言；**真库未验证**，不得以 MySQL 结果代替（E-028） | 包资产层面已核对；运行时连接未验证 | E-031 |
-| SQLite 3.35+ | Sqlite | 部分通过（8 项安装脚本真库用例含自定义前缀，见 E-027） | 已实测：Microsoft.Data.Sqlite 10.0.13 在 net10 宿主加载 | E-027 |
+| MySQL 8.0+ | MySql | 实现与脚本模板已交付；**真库未验证**（E-028）；15 项套件已在统一真库入口待跑（E-048、E-049） | 包资产层面已核对；运行时连接未验证 | E-031、E-048 |
+| MariaDB 10.6+ | MySql | 同一份脚本与方言；**真库未验证**，不得以 MySQL 结果代替（E-028）；15 项套件已在统一真库入口待跑（E-048、E-049） | 包资产层面已核对；运行时连接未验证 | E-031、E-048 |
+| SQLite 3.35+ | Sqlite | 部分通过（8 项安装脚本真库用例含自定义前缀，见 E-027）；15 项统一合同套件已在统一真库入口真跑（E-049） | 已实测：Microsoft.Data.Sqlite 10.0.13 在 net10 宿主加载 | E-027、E-049 |
 | Oracle 19c+ | Oracle | 实现与脚本模板已交付；**2026-10-20 真库验收通过 15/15**（E-044，用户提供的 SID 实例，net8.0 宿主）；驱动仅 net8.0/netstandard2.1，**ns2.0 宿主不可用** | 包资产层面已核对；运行时连接已验证 | E-032、E-044 |
 | DM8 原生模式（COMPATIBLE_MODE=0） | Dm | 实现与脚本模板已交付；**2026-10-20 真库验收通过 15/15，比较/分页两项发布阻塞关闭**（E-044：实测比较空白填充，已加 CHAR_LENGTH 守卫）；驱动无 net10 资产，验收在 net8.0 宿主执行 | 包资产层面已核对；运行时连接已验证 | E-033、E-040、E-044 |
 | DM8 Oracle 兼容模式（=2） | Dm | 实现与脚本模板已交付（独立方言与脚本）；**2026-10-20 真库验收通过 15/15**（E-044） | 同上 | E-040、E-044 |
@@ -289,6 +289,17 @@ git diff --check
 ```
 
 Release 构建必须实际覆盖八个类库的五种 TFM，另执行 COMPAT-02/03 的资产/消费者验证。集成测试未配置部分数据库时，即使命令退出成功，也要读取结果中的跳过项并记录缺口；不能据此勾选整个数据库阶段。CI 应将必需数据库缺失作为发布门禁失败。
+
+真库验收只有一个入口：`tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests`（不在 slnx 内，CI 不触达），通过
+`databases.json` 切换目标，详见该项目的 README。SQLite 零配置即跑，其余套件按填写情况如实跳过：
+
+```powershell
+dotnet test tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests -c Release -f net8.0
+dotnet test tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests -c Release -f net8.0 --filter "FullyQualifiedName~PostgreSql"
+```
+
+SQL Server 与 DM 的套件必须在 net8.0/net9.0 宿主执行（驱动无 net10 资产，设计 5.1）；在 net10 宿主上它们
+直接拒跑并注明原因，不产出不算数的绿。
 
 CI-03 在前置门禁全部通过后执行打包，例如：
 
@@ -941,6 +952,31 @@ dotnet pack Sharp.OpenIddict.Stores.slnx --configuration Release --no-build --ou
 - 验证：`dotnet build tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests -c Release` 全 TFM 0 警告 0 错误；`dotnet test ... -f net8.0 --filter "MySqlStoreContractTests|MariaDbStoreContractTests"` **30 项如实跳过**（无 secrets，已确认是跳过而非通过）。本地门禁 `pwsh ./scripts/verify.ps1` 不受影响：验收项目故意不在 slnx 内，测试数与跳过数均未变。
 - 结果与缺口：MySQL/MariaDB 从"没有可跑的东西"变成"有东西待跑"。真库一栏仍记未验证，须在用户提供 `MySql`/`MariaDb` 连接串后执行本套件才可改口径。本轮不改变任务勾选状态。
 
+### E-049：真库测试合并为单一可切换入口（六库全覆盖）
+
+- 任务：无任务清单编号（用户要求"应该有专门的测试程序，集成所有类型数据库的存储，通过配置切换数据库"）；系列：1.x。
+- 日期：2026-10-23；实现：本次提交。
+- 背景：仓库已有真库验收项目（E-044/E-048），但真库入口有两个、切换方式是两套：本项目靠 user-secrets，SQL Server 15 项靠 `IntegrationTests` 里的 `DSH_SQLSERVER` 环境变量。既没有"一个配置切库"，SQL Server 也不在统一入口内，SQLite 则只有零散用例。
+- 产物：
+  - `AcceptanceServers.cs`——从 user-secrets 改为读取 `tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests/databases.json`（`provider` 选择 + `connectionStrings` + `schemas`）。三种跳过原因分开表述：未选中 / 已选中但该键为空 / 无配置文件。
+  - `databases.json.template`——提交的模板（允许注释），`databases.json` 加入 `.gitignore`，连接串不进仓库。
+  - `SqliteStoreContractTests.cs`——15 项，零配置：目标是本次运行创建的临时文件，跑完删除；清理前复核文件名。
+  - `SqlServerStoreContractTests.cs`——16 项（15 项同一合同 + 自定义前缀/schema），自建并 `DROP DATABASE`；由 `Net8HostAcceptanceFactAttribute` 在 net10 宿主拒跑。
+  - `AcceptanceFactAttribute.cs`——抽出 `Net8HostAcceptanceFactAttribute`，DM 与 SQL Server 共用"驱动无 net10 资产"这条判定，不再各写一份。
+  - `ServerAcceptanceBase.cs`——新增 `PrepareTargetAsync`（建库）、`ReleaseAsync`（释放库文件/库）、可写 `ConnectionString`、`ExecuteScriptAsync`；清理失败时仍会释放资源。
+  - `AcceptanceConfigurationTests.cs`——配置规则自检 10 项（跳过原因必须含键名、模板与 `.gitignore` 必须在位）。
+- 删除（同一根因的两个入口收敛为一个）：
+  - `IntegrationTests/SqlServerStoreContractTests.cs`（迁入验收项目）、`ServerFactAttribute.cs`（无使用者）、`TestFacilityTests` 中依赖它的两条测试。
+  - `IntegrationTests` 的 `Microsoft.Data.SqlClient`/`Npgsql`/`MySqlConnector`/`DM.DmProvider` 包引用与 `DeploymentScript.SqlServer`。
+- 验证命令与结果：
+  - `dotnet build tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests -c Release`：三 TFM 0 警告 0 错误。
+  - 无配置文件：`已通过 25，跳过 121`——15 项 SQLite + 10 项配置自检真跑，八个服务器套件如实跳过。
+  - `provider: Sqlite` 且 PostgreSQL 连接串已填：仍 `25 通过 / 121 跳过`，证明选择确实生效（未选中的套件不因"有连接串"而跑）。
+  - `provider: PostgreSql`：`10 通过 / 136 跳过`，SQLite 也被排除。
+  - net10 宿主 + 已配置 SQL Server：15 项报 `must run on a net8.0 host: this provider's driver ships no net10 asset`，无一误跑。
+  - `dotnet build Sharp.OpenIddict.Stores.slnx -c Release --no-incremental`：0 警告 0 错误；`dotnet test`：`126 单元 + 332 集成，0 跳过`。
+- 结果与缺口：真库入口从两个降为一个，六种数据库（含 DM 三模式）在同一项目、同一合同、同一配置下运行。基线跳过数从 16 变 0——不是"跳过的用例消失了"，而是它们搬到了不进 slnx 的验收项目，在那里按配置如实跳过。真库结论本身不变：SQL Server/MySQL/MariaDB/DM MySQL 兼容模式仍须在有服务器时执行本套件后才能改口径。
+
 
 后续任务完成时复制以下模板并填写，再勾选任务；同一任务有多个系列或环境时分别列明，不覆盖过去的失败/修复记录。
 ```text
@@ -983,8 +1019,9 @@ dotnet pack Sharp.OpenIddict.Stores.slnx --configuration Release --no-build --ou
 
 ### 9.1 当前状态快照
 
-- 已完成 **33 / 50** 项（CI-01 部分完成，未计入；2026-10-20 新增交付：达梦三种声明兼容模式 E-040、SQL 生成工具 E-041、CI/CD 工作流 E-042、门禁顺序修复 E-039、包版本与架构 Series 自主编号 E-043，均不改变任务勾选状态；同日 DB-03/DB-06 勾选、DB-07 两模式验收完成；2026-10-21 全库走查缺陷修复 E-045、2026-10-23 全 provider 走查 E-046 与其待修项修复 E-047，均不改变任务勾选状态）。全部完成的阶段：P0 文档基线、P2 工程与基础设施（ENG-01～ENG-05）、P3 SQLite 基础读写（6/6）、P6 多目标与包资产（4/4）；P4 的 QUERY-01～03 与 LIFE-01～04 完成。六 provider 的方言与安装脚本模板均已交付（E-029～E-033），**DB-01（SQLite）、DB-02（SQL Server）、DB-03（PostgreSQL）、DB-06（Oracle）、DB-07 的原生与 Oracle 兼容模式有真库验收记录**（E-044），DB-04/DB-05 与 DB-07 的 MySQL 兼容模式真库一栏按 §5 记“未验证”（见下方约束与 E-028；该模式现已有套件，见 E-047）。本地基线：460 项通过（126 单元 + 334 集成），16 项跳过，8 个包；门禁入口 `scripts/verify.ps1`（E-036，打包先于测试的顺序见 E-039）。基线已整体提交并纳入版本控制（E-025、E-026、E-029）。
-- 验证基线（本地，无任何数据库服务器）：`dotnet build Sharp.OpenIddict.Stores.slnx -c Release` 0 警告 0 错误；`dotnet pack -o artifacts` 产出 8 个包；`dotnet test` 通过 **460 项（126 单元 + 334 集成），16 项显式跳过**——跳过的是 `SqlServerStoreContractTests`，需要真实 SQL Server。任何改动的底线是不低于这组数字，且跳过项不得减少。真库验收证据（E-044）由 `tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests/` 在用户提供的服务器上产生，不进入该基线，也不因缺少服务器而降低。
+- 已完成 **33 / 50** 项（CI-01 部分完成，未计入；2026-10-20 新增交付：达梦三种声明兼容模式 E-040、SQL 生成工具 E-041、CI/CD 工作流 E-042、门禁顺序修复 E-039、包版本与架构 Series 自主编号 E-043，均不改变任务勾选状态；同日 DB-03/DB-06 勾选、DB-07 两模式验收完成；2026-10-21 全库走查缺陷修复 E-045、2026-10-23 全 provider 走查 E-046 与其待修项修复 E-047、真库入口合并 E-049，均不改变任务勾选状态）。全部完成的阶段：P0 文档基线、P2 工程与基础设施（ENG-01～ENG-05）、P3 SQLite 基础读写（6/6）、P6 多目标与包资产（4/4）；P4 的 QUERY-01～03 与 LIFE-01～04 完成。六 provider 的方言与安装脚本模板均已交付（E-029～E-033），**DB-01（SQLite）、DB-02（SQL Server）、DB-03（PostgreSQL）、DB-06（Oracle）、DB-07 的原生与 Oracle 兼容模式有真库验收记录**（E-044），DB-04/DB-05 与 DB-07 的 MySQL 兼容模式真库一栏按 §5 记“未验证”（见下方约束与 E-028；该模式现已有套件，见 E-047）。本地基线：458 项通过（126 单元 + 332 集成），0 项跳过，8 个包；门禁入口 `scripts/verify.ps1`（E-036，打包先于测试的顺序见 E-039）。基线已整体提交并纳入版本控制（E-025、E-026、E-029）。
+- 验证基线（本地，无任何数据库服务器）：`dotnet build Sharp.OpenIddict.Stores.slnx -c Release` 0 警告 0 错误；`dotnet pack -o artifacts` 产出 8 个包；`dotnet test` 通过 **458 项（126 单元 + 332 集成），0 项跳过**。任何改动的底线是不低于这组数字。真库验收证据（E-044、E-049）由 `tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests/` 产生，该项目不进 slnx、不进入该基线：未配置的服务器套件在那里如实跳过并写明缺哪个键，不因缺少服务器而降低。
+- **真库只有一个入口**：`tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests`，通过 `databases.json`（由 `databases.json.template` 复制，已被 gitignore）选择 provider 与连接串。SQLite 零配置即跑；SQL Server 与 DM 套件必须在 net8.0/net9.0 宿主执行，在 net10 上直接拒跑（设计 5.1）。`IntegrationTests` 已不含任何真库套件、不再引用 SQL Server/PostgreSQL/MySQL/DM 驱动（E-049）。
 - **走查待修项的现状以 `docs/walkthrough-findings.md` 为准**（E-046 建立、E-047 修复 5 条，按严重度排列的活文档）。第 1 轮 8 条待修中，第 7 条当轮已顺手修掉，第 2 轮又修了 5 条（达梦 `CASE_SENSITIVE` 启动探针、达梦 MySQL 兼容模式验收套件、PostgreSQL 摘要列宽度约束、标识符字节计量注释、`BuildPaging` 契约注释）；**仍待修的只有两项**：SqlTool 升级路径（等系列 2）与 Oracle/MySQL/达梦 MySQL 兼容模式的真库补跑（本地约束不连接服务端）。修复前请先读该文档，避免与已排除的误报重复排查。
 - 已具备的能力：四类 Store 的全部 145 个成员、集合索引（JSON 权威 + SHA-256 候选 + Ordinal 复核）、Update CAS、七种批量撤销、Prune 清理、关联删除矩阵、IQueryable 回调翻译、逐行异步读取、五 TFM 与分 TFM 依赖组、八个包资产、六套方言（SQLite、SQL Server、PostgreSQL、MySQL/MariaDB、Oracle、达梦三种声明模式）、SQL 部署脚本生成工具（`tools/`，E-041）、CI/CD 工作流（`.github/workflows/ci-cd.yml`，E-042）。
 - 仓库不提交 `global.json`（E-027）：工程只要求 .NET 10，换机器不会因补丁号对不上而构建失败。
@@ -1031,11 +1068,11 @@ DB-04/05 的实现已完成（E-031）：MySQL 与 MariaDB 共用方言与模板
 `src/`、`tests/`、`samples/`、`docs/contracts/`、`Directory.*.props`、`*.slnx`、`.gitattributes` 已在 `ec2a420`（E-025）纳入版本控制，搬到新路径后 `git status` 应当干净（`global.json` 已删除，见 E-027）。仍然：
 
 - 不要执行 `git clean -fdx`，它会连未跟踪的 `bin/`、`obj/`、`artifacts/` 一起删；`artifacts/` 里的 8 个包需要重新 `dotnet pack` 才能恢复（COMPAT-02 的断言读的是真实 nupkg）。
-- 移动后先在新路径执行 `dotnet restore Sharp.OpenIddict.Stores.slnx`，再 `dotnet test`，确认仍是 383 项通过 + 16 项跳过（`bin/`、`obj/` 中留有旧的绝对路径）。
+- 移动后先在新路径执行 `dotnet restore Sharp.OpenIddict.Stores.slnx`，再 `dotnet test`，确认仍是 458 项通过、0 项跳过（`bin/`、`obj/` 中留有旧的绝对路径）。
 
 ### 9.6 下一会话的读取顺序
 
 1. 本节（§9）确认状态与下一步。
 2. `docs/design.md` §1.1（命名）、§5.1（驱动矩阵）、§9.3（执行层）、§10.1（模板交付）四处与本阶段强相关。
 3. §4 任务清单确认具体验收标准。
-4. 动手前先跑一次 `dotnet test`，确认基线仍是 383 项通过 + 16 项跳过（跳过项必须保持，不能为了全绿去搭服务器）。
+4. 动手前先跑一次 `dotnet test`，确认基线仍是 458 项通过、0 项跳过；真库套件不在该基线内，见 `tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests/README.md`。

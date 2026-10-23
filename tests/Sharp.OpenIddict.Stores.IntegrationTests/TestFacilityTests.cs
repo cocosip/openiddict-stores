@@ -8,9 +8,13 @@ namespace Sharp.OpenIddict.Stores.IntegrationTests;
 
 /// <summary>
 /// ENG-05: the shared test facilities themselves. These tests guard the guards - the naming rule that keeps
-/// cleanup from touching a database it did not create, the visibility of a missing server, and the fact that
-/// the same contract runs against more than one provider instead of being copied per provider.
+/// cleanup from touching a database file it did not create, and the fact that the same contract runs against
+/// more than one provider instead of being copied per provider.
 /// </summary>
+/// <remarks>
+/// The skip path of a missing server moved to <c>Sharp.OpenIddict.Stores.ServerAcceptanceTests</c> together
+/// with the server suites; this project no longer has a server-backed fact to exercise it with.
+/// </remarks>
 public sealed class TestFacilityTests
 {
     [Fact]
@@ -48,40 +52,6 @@ public sealed class TestFacilityTests
     }
 
     [Fact]
-    public void MissingServer_IsReportedAsSkippedWithTheReason()
-    {
-        const string variable = "DSH_TEST_FACILITY_ABSENT_SERVER";
-
-        // The variable is deliberately unset for the whole run, so this exercises the real skip path rather
-        // than a simulated one.
-        Environment.SetEnvironmentVariable(variable, null);
-
-        var attribute = new ServerFactAttribute(variable, "A server that is not configured");
-
-        // A skipped test must say why: "skipped" on its own is indistinguishable from "someone forgot to run
-        // it", and the design refuses to count a skip as a pass (design 6, 11).
-        Assert.False(string.IsNullOrEmpty(attribute.Skip));
-        Assert.Contains(variable, attribute.Skip, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ConfiguredServer_IsNotSkipped()
-    {
-        const string variable = "DSH_TEST_FACILITY_PRESENT_SERVER";
-
-        Environment.SetEnvironmentVariable(variable, "not-a-real-connection-string");
-
-        try
-        {
-            Assert.Null(new ServerFactAttribute(variable, "A configured server").Skip);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable(variable, null);
-        }
-    }
-
-    [Fact]
     public void StoreContracts_RunAgainstMoreThanOneProvider()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -100,11 +70,9 @@ public sealed class TestFacilityTests
         // the generic contract classes consume them; what must not appear is a per-provider duplicate of the
         // assertion bodies. This checks the arrangement that makes that true: the provider-specific files stay
         // thin, and the shared contract files carry the assertions.
-        var providerSpecific = Directory.GetFiles(tests, "Sqlite*StoreTests.cs")
-            .Concat(Directory.GetFiles(tests, "SqlServerStoreContractTests.cs"))
-            .ToList();
+        var providerSpecific = Directory.GetFiles(tests, "Sqlite*StoreTests.cs").ToList();
 
-        Assert.Equal(5, providerSpecific.Count);
+        Assert.Equal(4, providerSpecific.Count);
 
         foreach (var file in providerSpecific)
         {

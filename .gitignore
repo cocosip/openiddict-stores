@@ -358,3 +358,6 @@ ASALocalRun/
 docs/superpowers/
 .superpowers/
 
+# Real-database acceptance configuration: it carries connection strings, so only the template is committed.
+tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests/databases.json
+

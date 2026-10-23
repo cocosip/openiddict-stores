@@ -5,6 +5,7 @@ using Sharp.OpenIddict.Stores.Dm;
 using Sharp.OpenIddict.Stores.MySql;
 using Sharp.OpenIddict.Stores.Oracle;
 using Sharp.OpenIddict.Stores.PostgreSql;
+using Sharp.OpenIddict.Stores.SqlServer;
 
 namespace Sharp.OpenIddict.Stores.ServerAcceptance;
 
@@ -16,6 +17,14 @@ namespace Sharp.OpenIddict.Stores.ServerAcceptance;
 /// </summary>
 internal static class DeploymentScript
 {
+    public static string Sqlite(string prefix, string? schema = null)
+        => OpenIddictStoreIdentifiers.RenderDeploymentScript(
+            Template("Sqlite"), OpenIddict.Stores.Sqlite.OpenIddictStoreSqliteDialect.Instance, prefix, schema);
+
+    public static string SqlServer(string prefix, string? schema = null)
+        => OpenIddictStoreIdentifiers.RenderDeploymentScript(
+            Template("SqlServer"), OpenIddictStoreSqlServerDialect.Instance, prefix, schema);
+
     public static string PostgreSql(string prefix, string? schema = null)
         => OpenIddictStoreIdentifiers.RenderDeploymentScript(
             Template("PostgreSql"), OpenIddictStorePostgreSqlDialect.Instance, prefix, schema);
@@ -52,21 +61,6 @@ internal static class DeploymentScript
 
     private static string Template(string provider, string? mode = null)
         => File.ReadAllText(Path.Combine(
-            RepositoryRoot, "src", $"Sharp.OpenIddict.Stores.{provider}", "Sql", "1", "install",
+            RepositoryLayout.Root, "src", $"Sharp.OpenIddict.Stores.{provider}", "Sql", "1", "install",
             mode is null ? "v0001.sql.template" : Path.Combine(mode, "v0001.sql.template")));
-
-    private static string RepositoryRoot { get; } = LocateRepositoryRoot();
-
-    private static string LocateRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Sharp.OpenIddict.Stores.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
-        return directory?.FullName
-            ?? throw new InvalidOperationException("Could not locate the repository root (Sharp.OpenIddict.Stores.slnx).");
-    }
 }

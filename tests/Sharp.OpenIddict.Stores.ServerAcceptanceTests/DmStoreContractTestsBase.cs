@@ -17,12 +17,15 @@ namespace Sharp.OpenIddict.Stores.ServerAcceptance;
 /// matching the declared entry, and <c>CASE_SENSITIVE=1</c> without which every exact comparison silently
 /// folds case (see the DM <c>Sql/README.md</c>). Run these suites on a net8.0 host: the driver ships no
 /// net10 asset, so a net10 run would silently exercise the netstandard fallback instead (design 5.1); the
-/// <see cref="DmAcceptanceFactAttribute"/> refuses a net10 host outright.
+/// <see cref="Net8HostAcceptanceFactAttribute"/> refuses a net10 host outright.
 /// </summary>
 public abstract class DmStoreContractTestsBase : ServerAcceptanceBase
 {
-    /// <summary>The user-secrets key holding the schema the tables are installed into; empty uses the user default.</summary>
-    protected abstract string SchemaKey { get; }
+    /// <summary>
+    /// The schema the tables are installed into, read from this key's <c>schemas</c> entry. Defaults to the
+    /// suite's own key: one configuration entry describes one target, connection string and schema together.
+    /// </summary>
+    protected virtual string SchemaKey => Key;
 
     /// <summary>The declared compatibility mode; names the template directory and the dialect.</summary>
     protected abstract string DmMode { get; }
@@ -30,7 +33,7 @@ public abstract class DmStoreContractTestsBase : ServerAcceptanceBase
     /// <summary>The <c>COMPATIBLE_MODE</c> value the instance must report for this mode's entry.</summary>
     protected abstract string ExpectedCompatibleMode { get; }
 
-    protected override string? SchemaName => AcceptanceServers.ConnectionString(SchemaKey);
+    protected override string? SchemaName => ConfiguredSchema(SchemaKey);
 
     protected override OpenIddictStoreProvider Provider => OpenIddictStoreProvider.Dm;
 

@@ -40,7 +40,8 @@ jobs:
 
       # One definition of "green" for local work and CI: the script runs restore, build, pack (packages
       # before tests - the package asset tests read them), and tests, and fails on any non-zero step.
-      # The server-backed suites skip honestly because no database is installed on the runner.
+      # No database is installed on the runner, and none is needed: real-database acceptance is a separate
+      # project outside the solution that CI never touches, because it needs user-provided servers.
       - name: Run the verification gates
         shell: pwsh
         run: ./scripts/verify.ps1

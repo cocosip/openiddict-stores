@@ -8,9 +8,22 @@ The [project design document](docs/design.md) is the authority for development, 
 
 The [development and progress document](docs/development.md) breaks the design into checkable implementation tasks and records phase progress, completion criteria, the per-database acceptance matrix, and commit and verification evidence; MIG-03/04 and section 5.1 track delivery, upgrade and maintenance acceptance for each database's SQL scripts. Each completed item must update its task status and completion record.
 
-Current state: the solution layout, central package management and five-target multi-targeting are in place, and the project restores, builds, packs eight packages and passes 453 tests (121 unit + 332 integration, 16 skipped) with no database server installed. The core package provides the builder, options validation, connection factory, default entity registration, JSON/UTC converters, the four stores (Application, Scope, Authorization, Token) and the `IQueryable` callback translator.
+Current state: the solution layout, central package management and five-target multi-targeting are in place, and the project restores, builds, packs eight packages and passes 458 tests (126 unit + 332 integration) with no database server installed. The core package provides the builder, options validation, connection factory, default entity registration, JSON/UTC converters, the four stores (Application, Scope, Authorization, Token) and the `IQueryable` callback translator.
 
-All six dialects and their versioned install scripts are delivered: SQLite, SQL Server, PostgreSQL, MySQL/MariaDB, Oracle and Dameng — the DM8 provider declares its three compatibility modes separately (native, Oracle-compatible, MySQL-compatible), each with its own dialect, script and acceptance obligation; the SQL92/TDS/DM6/Teradata modes are undeclared. Only **SQLite** has real-database acceptance evidence, because it needs no server — it is the existing NuGet driver plus a temporary file. SQL Server, PostgreSQL, MySQL, MariaDB, Oracle and DM are implemented and statically reviewed but **not verified against a live server**, so they are not yet within the supported range; the per-database status in the acceptance matrix records exactly what was and was not executed. Protocol-level integration with a live OpenIddict server is not implemented yet, so this is not a released package.
+All six dialects and their versioned install scripts are delivered: SQLite, SQL Server, PostgreSQL, MySQL/MariaDB, Oracle and Dameng — the DM8 provider declares its three compatibility modes separately (native, Oracle-compatible, MySQL-compatible), each with its own dialect, script and acceptance obligation; the SQL92/TDS/DM6/Teradata modes are undeclared. Only **SQLite** has real-database acceptance evidence that runs anywhere, because it needs no server — it is the existing NuGet driver plus a temporary file. SQL Server, PostgreSQL, MySQL, MariaDB, Oracle and DM are implemented and statically reviewed; PostgreSQL, Oracle and DM (native and Oracle-compatible) also have recorded runs against user-provided servers, while SQL Server, MySQL/MariaDB and DM's MySQL-compatible mode are **not yet verified against a live server**, so they are not within the supported range. The per-database status in the acceptance matrix records exactly what was and was not executed. Protocol-level integration with a live OpenIddict server is not implemented yet, so this is not a released package.
+
+## Real-database acceptance
+
+One harness covers every supported database, and one configuration file switches the target:
+
+```bash
+cp tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests/databases.json.template \
+   tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests/databases.json
+dotnet test tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests -c Release -f net8.0
+```
+
+`databases.json` selects the provider (`all`, or one of `Sqlite`/`SqlServer`/`PostgreSql`/`MySql`/`MariaDb`/`Oracle`/`DmNative`/`DmOracle`/`DmMySql`) and carries the connection strings; it is ignored by git, and the committed template shows its shape. SQLite needs nothing and always runs, so a machine with no database server still produces real evidence. A configured but unreachable server fails; an unconfigured one is reported as skipped with the exact key that is missing. The project is not in the solution and CI never touches it. See
+[tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests/README.md](tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests/README.md).
 
 ## Generating the deployment SQL
 
@@ -32,7 +45,7 @@ schema passed here must equal what the application configures through `SetTableP
 pwsh ./scripts/verify.ps1
 ```
 
-Runs restore, a `--no-incremental` Release build for all target frameworks, the unit and integration tests (SQLite runs for real; the server-backed suites skip and say so), packing, and the package-content checks. Every step propagates its exit code, so a failure cannot be reported as a pass. Add `-SkipPack` to skip the packaging steps.
+Runs restore, a `--no-incremental` Release build for all target frameworks, the unit and integration tests (SQLite runs for real; nothing here needs a server), packing, and the package-content checks. Every step propagates its exit code, so a failure cannot be reported as a pass. Add `-SkipPack` to skip the packaging steps. The real-database acceptance harness is deliberately outside this gate and outside the solution.
 
 GitHub Actions (`.github/workflows/ci-cd.yml`) runs the same gate on branch pushes and pull requests — build and test only. A version tag (`v*.*.*`) additionally packs the eight packages, publishes them to NuGet and creates a GitHub release; the publish job needs a `NUGET_API_KEY` secret.
 

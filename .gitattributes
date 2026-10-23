@@ -7,6 +7,7 @@
 *.targets text eol=lf
 *.slnx text eol=lf
 *.json text eol=lf
+*.json.template text eol=lf
 *.md text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf

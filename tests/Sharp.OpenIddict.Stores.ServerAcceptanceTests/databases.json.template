@@ -1,0 +1,32 @@
+{
+  // Which target this run accepts. "all" runs every entry that has a connection string; any other value runs
+  // only that one: Sqlite, SqlServer, PostgreSql, MySql, MariaDb, Oracle, DmNative, DmOracle, DmMySql.
+  // SQLite needs nothing else and runs either way.
+  "provider": "all",
+
+  // Connection strings, never committed: copy this file to databases.json (ignored by git) and fill in the
+  // servers you have. Leave an entry empty and its suite reports itself as skipped with the reason; a filled-in
+  // entry that cannot be reached is a failure, because that is what "configured" means.
+  "connectionStrings": {
+    // A master-database connection whose account may CREATE and DROP databases: this suite creates its own.
+    "SqlServer": "",
+    "PostgreSql": "",
+    // One physical template serves both, but each server needs its own run: a pass on one is not evidence
+    // for the other.
+    "MySql": "",
+    "MariaDb": "",
+    "Oracle": "",
+    // DM8 declares three compatibility modes separately; each needs the instance it was verified against.
+    "DmNative": "",
+    "DmOracle": "",
+    "DmMySql": ""
+  },
+
+  // The schema each server installs into. Omit an entry to use the connection's default schema; SQLite and
+  // MySQL reject a schema, so they never appear here.
+  "schemas": {
+    "DmNative": "OIDC",
+    "DmOracle": "OIDC",
+    "DmMySql": "OIDC"
+  }
+}

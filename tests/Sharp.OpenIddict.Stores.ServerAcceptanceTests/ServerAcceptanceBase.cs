@@ -13,29 +13,29 @@ using Xunit;
 namespace Sharp.OpenIddict.Stores.ServerAcceptance;
 
 /// <summary>
-/// Shared plumbing for acceptance runs on real servers that give the test no database of its own
-/// (PostgreSQL, Oracle, and DM install into a schema other things may share). Isolation and cleanup work one
-/// level below a create-and-drop-its-own-database fixture: the run renders the shipped template with a
-/// run-unique table prefix (<see cref="TestTablePrefix"/>), and disposal lists the catalog and drops only
-/// the exact nine names this run's prefix produces — a pre-existing deployment under the default prefix, and
-/// anything else in the schema, is never touched.
+/// Shared plumbing for the real-database acceptance runs. Isolation and cleanup work one level below a
+/// create-and-drop-its-own-database fixture: the run renders the shipped template with a run-unique table
+/// prefix (<see cref="TestTablePrefix"/>), and disposal lists the catalog and drops only the exact nine names
+/// this run's prefix produces — a pre-existing deployment under the default prefix, and anything else in the
+/// schema, is never touched.
 /// </summary>
 /// <remarks>
-/// The acceptance facts themselves are declared by the concrete suites (one per server), because an
-/// <see cref="AcceptanceFactAttribute"/> needs its secret key at compile time. The bodies live here so every
-/// provider is held to the same contract without the logic being copied per dialect.
+/// The acceptance facts themselves are declared by the concrete suites (one per target), because an
+/// <see cref="AcceptanceFactAttribute"/> needs its configuration key at compile time. The bodies live here so
+/// every provider is held to the same contract without the logic being copied per dialect.
 /// </remarks>
 public abstract class ServerAcceptanceBase : IAsyncLifetime
 {
     private string _prefix = string.Empty;
     private string? _schema;
     private string _connectionString = string.Empty;
+    private bool _targetReady;
     private OpenIddictStoreApplicationStore<OpenIddictStoreApplication> _applications = null!;
     private OpenIddictStoreScopeStore<OpenIddictStoreScope> _scopes = null!;
     private OpenIddictStoreAuthorizationStore<OpenIddictStoreAuthorization> _authorizations = null!;
     private OpenIddictStoreTokenStore<OpenIddictStoreToken> _tokens = null!;
 
-    /// <summary>The user-secrets key whose connection string selects the server for this suite.</summary>
+    /// <summary>The configuration key that selects this suite's target in <c>databases.json</c>.</summary>
     protected abstract string Key { get; }
 
     protected abstract OpenIddictStoreProvider Provider { get; }
@@ -44,6 +44,30 @@ public abstract class ServerAcceptanceBase : IAsyncLifetime
 
     /// <summary>The dedicated schema, or null to install into the connection's default schema.</summary>
     protected virtual string? SchemaName => null;
+
+    /// <summary>
+    /// The schema configured for this suite's key, or null when none is. A suite that installs into a
+    /// dedicated schema gets it from the same file as its connection string, so one entry describes one target.
+    /// </summary>
+    protected static string? ConfiguredSchema(string key)
+    {
+        var schema = AcceptanceServers.Schema(key);
+
+        return schema.Length == 0 ? null : schema;
+    }
+
+    /// <summary>
+    /// The connection string the fixture runs against. The default reads the configured entry for
+    /// <see cref="Key"/>; the file-backed provider overrides it because its "connection string" is a database
+    /// file this run creates, not a value a deployment supplies.
+    /// </summary>
+    protected virtual string ResolveConnectionString() => AcceptanceServers.ConnectionString(Key);
+
+    /// <summary>
+    /// Releases whatever the run created outside the owned tables (the SQLite database file). Called after the
+    /// table cleanup, including when that cleanup fails, so a failing run does not leave the file behind.
+    /// </summary>
+    protected virtual Task ReleaseAsync() => Task.CompletedTask;
 
     protected abstract DbConnection CreateConnection();
 
@@ -61,13 +85,24 @@ public abstract class ServerAcceptanceBase : IAsyncLifetime
     /// <summary>The provider's own prerequisite checks: server version, instance initialization parameters.</summary>
     protected abstract Task CheckServerPrerequisitesAsync();
 
-    protected string ConnectionString => _connectionString;
+    /// <summary>
+    /// Runs after the connection string is resolved and before the install script, for a provider whose target
+    /// needs verifying or preparing first (a configured schema that has to exist). Default: nothing.
+    /// </summary>
+    protected virtual Task PrepareTargetAsync() => Task.CompletedTask;
+
+    /// <summary>
+    /// The connection the run uses. A suite that creates its own target (SQL Server creates and drops a
+    /// database) replaces it in <see cref="PrepareTargetAsync"/>; everything after that, the install script
+    /// included, uses the value set here.
+    /// </summary>
+    protected string ConnectionString { get => _connectionString; set => _connectionString = value; }
 
     protected string Prefix => _prefix;
 
     public async Task InitializeAsync()
     {
-        _connectionString = AcceptanceServers.ConnectionString(Key);
+        _connectionString = ResolveConnectionString();
 
         if (_connectionString.Length == 0)
         {
@@ -76,6 +111,12 @@ public abstract class ServerAcceptanceBase : IAsyncLifetime
 
         _prefix = TestTablePrefix.Create();
         _schema = SchemaName;
+
+        await PrepareTargetAsync();
+
+        // From here the connection points at this run's own target, so cleanup may run even if the install
+        // fails halfway: the tables it managed to create are this run's to remove.
+        _targetReady = true;
 
         await ExecuteInstallScriptAsync();
 
@@ -100,7 +141,26 @@ public abstract class ServerAcceptanceBase : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (_prefix.Length == 0 || _connectionString.Length == 0)
+        try
+        {
+            await DropOwnedTablesAsync();
+        }
+        finally
+        {
+            // The file has to go even when the table cleanup threw: a half-cleaned run must not also leak the
+            // database file it created.
+            await ReleaseAsync();
+        }
+    }
+
+    private async Task DropOwnedTablesAsync()
+    {
+        // Cleanup only ever runs against a target the run actually installed into. Without this, a failure in
+        // PrepareTargetAsync (creating the database) would leave ConnectionString pointing at the server's
+        // default database, and the drop loop would go looking for this run's prefix there. That prefix is
+        // generated and will not match anything - which is exactly the "it cannot happen" reasoning that this
+        // harness exists to refuse.
+        if (!_targetReady || _prefix.Length == 0 || _connectionString.Length == 0)
         {
             return;
         }
@@ -130,10 +190,14 @@ public abstract class ServerAcceptanceBase : IAsyncLifetime
     }
 
     /// <summary>Runs the rendered deployment copy the way a deployment would: render, then one statement per command.</summary>
-    protected async Task ExecuteInstallScriptAsync()
-    {
-        var script = RenderInstallScript(_prefix);
+    protected Task ExecuteInstallScriptAsync() => ExecuteScriptAsync(RenderInstallScript(_prefix));
 
+    /// <summary>
+    /// Executes one rendered script statement by statement. Shared so a suite that installs a second copy under
+    /// a custom prefix and schema goes through exactly the executor the run's own install uses.
+    /// </summary>
+    protected async Task ExecuteScriptAsync(string script)
+    {
         await using var connection = CreateConnection();
         await connection.OpenAsync();
 

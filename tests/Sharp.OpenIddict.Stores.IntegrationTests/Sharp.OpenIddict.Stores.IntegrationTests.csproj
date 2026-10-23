@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
-    <Description>Store contract and real-database integration tests: SQLite temporary files and external server fixtures.</Description>
+    <Description>Store contract and integration tests on SQLite temporary files. Real-server acceptance lives in Sharp.OpenIddict.Stores.ServerAcceptanceTests.</Description>
   </PropertyGroup>
 
   <ItemGroup>
@@ -12,13 +12,11 @@
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
   </ItemGroup>
 
+  <!-- SQLite only: this project needs no server. Oracle stays for the parameter-binding contract, which checks
+       driver-specific binding without connecting to anything. -->
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" />
-    <PackageReference Include="Microsoft.Data.SqlClient" />
-    <PackageReference Include="Npgsql" />
-    <PackageReference Include="MySqlConnector" />
     <PackageReference Include="Oracle.ManagedDataAccess.Core" />
-    <PackageReference Include="DM.DmProvider" />
   </ItemGroup>
 
   <ItemGroup>

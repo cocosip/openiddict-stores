@@ -27,14 +27,7 @@ internal static class DeploymentScript
         => OpenIddictStoreIdentifiers.RenderDeploymentScript(
             Template("Sqlite"), SqliteDialect, prefix);
 
-    /// <summary>Renders the SQL Server install script, optionally qualified with a schema.</summary>
-    public static string SqlServer(string prefix = DefaultPrefix, string? schema = null)
-        => OpenIddictStoreIdentifiers.RenderDeploymentScript(
-            Template("SqlServer"), SqlServerDialect, prefix, schema);
-
     private static IOpenIddictStoreDialect SqliteDialect => OpenIddict.Stores.Sqlite.OpenIddictStoreSqliteDialect.Instance;
-
-    private static IOpenIddictStoreDialect SqlServerDialect => OpenIddict.Stores.SqlServer.OpenIddictStoreSqlServerDialect.Instance;
 
     private static string RepositoryRoot { get; } = LocateRepositoryRoot();
 

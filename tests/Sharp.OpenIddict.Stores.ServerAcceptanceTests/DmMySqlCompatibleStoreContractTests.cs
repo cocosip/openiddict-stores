@@ -15,74 +15,72 @@ namespace Sharp.OpenIddict.Stores.ServerAcceptance;
 /// <remarks>
 /// The suite is deliberately a copy of the other two modes' fact list rather than a shared base with a mode
 /// parameter: an acceptance suite is evidence, and evidence that silently covers fewer facts because a mode
-/// was skipped is worse than no evidence. Configuring <c>DmMySql</c>/<c>DmMySqlSchema</c> in user-secrets is
-/// all it takes to run it.
+/// was skipped is worse than no evidence. Filling in <c>DmMySql</c> in <c>databases.json</c> is all it takes
+/// to run it.
 /// </remarks>
 public sealed class DmMySqlCompatibleStoreContractTests : DmStoreContractTestsBase
 {
     protected override string Key => AcceptanceServers.DmMySql;
 
-    protected override string SchemaKey => AcceptanceServers.DmMySqlSchema;
-
     protected override string DmMode => OpenIddictStoreDmMySqlCompatibleDialect.CompatibilityMode;
 
     protected override string ExpectedCompatibleMode => "4";
 
-    [DmAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
+    [Net8HostAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
     public Task Server_PrerequisitesMeetTheDeclaredMode() => CheckServerPrerequisitesAsync();
 
-    [DmAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
+    [Net8HostAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
     public Task InstallScript_CreatesTheNineTablesAndTheVersionRow()
         => Install_CreatesTheNineTablesAndTheVersionRowCore();
 
-    [DmAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
+    [Net8HostAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
     public Task ReRunningTheInstallScript_IsRefusedInsteadOfSkipped()
         => ReRunningTheInstallScript_IsRefusedInsteadOfSkippedCore();
 
-    [DmAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
+    [Net8HostAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
     public Task Application_RoundTripsUnicodeLargeValuesAndCollections()
         => Application_RoundTripsUnicodeLargeValuesAndCollectionsCore();
 
-    [DmAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
+    [Net8HostAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
     public Task Dates_KeepMicrosecondPrecisionAcrossCreateAndRead()
         => Dates_KeepMicrosecondPrecisionAcrossCreateAndReadCore();
 
-    [DmAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
+    [Net8HostAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
     public Task ExactComparison_DistinguishesCaseAndAccents()
         => ExactComparison_DistinguishesCaseAndAccentsCore();
 
-    [DmAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
+    [Net8HostAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
     public Task ExactComparison_RejectsATrailingSpaceVariantWhenTheStoredValueHasNone()
         => ExactComparison_RejectsATrailingSpaceVariantWhenTheStoredValueHasNoneCore();
 
-    [DmAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
+    [Net8HostAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
     public Task UniqueIndex_RejectsASecondRowWithTheSameClientId()
         => UniqueIndex_RejectsASecondRowWithTheSameClientIdCore();
 
-    [DmAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
+    [Net8HostAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
     public Task Update_RejectsAStaleConcurrencyToken()
         => Update_RejectsAStaleConcurrencyTokenCore();
 
-    [DmAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
+    [Net8HostAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
     public Task Paging_TilesTheWholeSetAndAcceptsAnOffsetWithoutACount()
         => Paging_TilesTheWholeSetAndAcceptsAnOffsetWithoutACountCore();
 
-    [DmAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
+    [Net8HostAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
     public Task CountQuery_CountsTheRows() => CountQuery_CountsTheRowsCore();
 
-    [DmAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
+    [Net8HostAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
     public Task ScopeResources_StaysCaseExactAndTheJsonStaysAuthoritative()
         => ScopeResources_StaysCaseExactAndTheJsonStaysAuthoritativeCore();
 
-    [DmAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
+    [Net8HostAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
     public Task AssociatedDelete_RemovesTokensReachableOnlyThroughTheAuthorization()
         => AssociatedDelete_RemovesTokensReachableOnlyThroughTheAuthorizationCore();
 
-    [DmAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
+    [Net8HostAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
     public Task BulkRevocation_TreatsANullStatusAsNotYetRevoked()
         => BulkRevocation_TreatsANullStatusAsNotYetRevokedCore();
 
-    [DmAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
+    [Net8HostAcceptanceFact(AcceptanceServers.DmMySql, "The DM8 MySQL-compatible acceptance suite")]
     public Task Prune_RemovesOnlyRowsBeforeTheThreshold()
         => Prune_RemovesOnlyRowsBeforeTheThresholdCore();
 }
