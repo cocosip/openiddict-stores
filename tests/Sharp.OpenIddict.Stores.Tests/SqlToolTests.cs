@@ -27,6 +27,12 @@ public sealed class SqlToolTests
             new[] { "native", "oracle-compatible", "mysql-compatible" },
             dm.Entries.Select(entry => entry.Mode).ToArray());
 
+        // Each entry names the dialect it renders with: a provider-wide dialect would misreport two of the
+        // three DM entries as native (design 5, 10.1).
+        Assert.Equal(
+            new[] { "OpenIddictStoreDmDialect", "OpenIddictStoreDmOracleCompatibleDialect", "OpenIddictStoreDmMySqlCompatibleDialect" },
+            dm.Entries.Select(entry => entry.Dialect.GetType().Name).ToArray());
+
         // The manifest is the source the digests are recorded in; the tool must expose the same claims.
         Assert.All(dm.Entries, entry => Assert.Equal(64, entry.Sha256.Length));
     }
@@ -100,6 +106,36 @@ public sealed class SqlToolTests
     {
         Assert.Throws<ArgumentException>(() => DeploymentScriptFactory.Render("Firestore"));
         Assert.Throws<ArgumentException>(() => DeploymentScriptFactory.Render("Dm", mode: "teradata"));
+    }
+
+    /// <summary>
+    /// The runtime refuses a dedicated schema where the provider has no such concept, and so must the tool:
+    /// rendering a script without the qualifier would install tables the application never looks for.
+    /// </summary>
+    [Theory]
+    [InlineData("MySql")]
+    [InlineData("Sqlite")]
+    public void Render_SchemaOnAProviderWithoutSchemaSupport_IsRejected(string provider)
+    {
+        Assert.Throws<ArgumentException>(() => DeploymentScriptFactory.Render(provider, schema: "OIDC"));
+
+        // The same call without a schema keeps working.
+        Assert.DoesNotContain("__PREFIX__", DeploymentScriptFactory.Render(provider), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A manifest may carry upgrade entries beside the install entry; the tool renders the install script and
+    /// must never hand an upgrade transition to a deployment as that script (design 10.1).
+    /// </summary>
+    [Fact]
+    public void ListProviders_ExposesOnlyInstallEntries()
+    {
+        Assert.All(DeploymentScriptFactory.ListProviders(), provider =>
+            Assert.All(provider.Entries, entry =>
+            {
+                Assert.Contains("/install/", entry.Path, StringComparison.Ordinal);
+                Assert.DoesNotContain("/upgrade/", entry.Path, StringComparison.Ordinal);
+            }));
     }
 
     [Theory]

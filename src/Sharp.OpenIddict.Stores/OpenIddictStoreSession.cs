@@ -167,10 +167,13 @@ internal sealed class OpenIddictStoreTransaction : IAsyncDisposable
 
     public DbTransaction Value => _transaction;
 
-    public Task CommitAsync(CancellationToken cancellationToken)
+    public async Task CommitAsync(CancellationToken cancellationToken)
     {
+        // The flag is set only after the commit succeeded: a failed commit must still roll back on dispose
+        // instead of being treated as already committed.
+        await OpenIddictStoreConnections.CommitAsync(_transaction, cancellationToken).ConfigureAwait(false);
+
         _committed = true;
-        return OpenIddictStoreConnections.CommitAsync(_transaction, cancellationToken);
     }
 
     public async ValueTask DisposeAsync()

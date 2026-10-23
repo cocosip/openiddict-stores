@@ -146,7 +146,7 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
         // window between reading the set and deleting it (design 16.2.1 step 1, LIFE-02).
         var locked = await session.ExecuteAsync(
             $"UPDATE {applications} SET {Column("ConcurrencyToken")} = {Column("ConcurrencyToken")} " +
-            $"WHERE {Column("Id")} = {Parameter("Id")} AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "ConcurrencyToken")}",
+            $"WHERE {Dialect.BuildExactStringEquals(Column("Id"), "Id")} AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "ConcurrencyToken")}",
             new { Id = entity.Id, ConcurrencyToken = entity.ConcurrencyToken },
             transaction.Value, cancellationToken).ConfigureAwait(false);
 
@@ -187,7 +187,7 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
             new { Id = entity.Id }, transaction.Value, cancellationToken).ConfigureAwait(false);
 
         var affected = await session.ExecuteAsync(
-            $"DELETE FROM {applications} WHERE {Column("Id")} = {Parameter("Id")} " +
+            $"DELETE FROM {applications} WHERE {Dialect.BuildExactStringEquals(Column("Id"), "Id")} " +
             $"AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "ConcurrencyToken")}",
             new { Id = entity.Id, ConcurrencyToken = entity.ConcurrencyToken },
             transaction.Value, cancellationToken).ConfigureAwait(false);
@@ -546,7 +546,7 @@ public class OpenIddictStoreApplicationStore<TApplication> : OpenIddictStoreBase
                 {Column("RedirectUris")} = {Parameter("RedirectUris")},
                 {Column("Requirements")} = {Parameter("Requirements")},
                 {Column("Settings")} = {Parameter("Settings")}
-            WHERE {Column("Id")} = {Parameter("Id")}
+            WHERE {Dialect.BuildExactStringEquals(Column("Id"), "Id")}
               AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "Previous")}",
             new
             {

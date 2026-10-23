@@ -112,7 +112,7 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
         // check and the delete cannot survive the cascade (design 16.2.1, LIFE-02).
         var locked = await session.ExecuteAsync(
             $"UPDATE {Table(Schema.Authorizations)} SET {Column("ConcurrencyToken")} = {Column("ConcurrencyToken")} " +
-            $"WHERE {Column("Id")} = {Parameter("Id")} AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "ConcurrencyToken")}",
+            $"WHERE {Dialect.BuildExactStringEquals(Column("Id"), "Id")} AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "ConcurrencyToken")}",
             new { Id = entity.Id, ConcurrencyToken = entity.ConcurrencyToken },
             transaction.Value, cancellationToken).ConfigureAwait(false);
 
@@ -133,7 +133,7 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
             new { Id = entity.Id }, transaction.Value, cancellationToken).ConfigureAwait(false);
 
         var affected = await session.ExecuteAsync(
-            $"DELETE FROM {Table(Schema.Authorizations)} WHERE {Column("Id")} = {Parameter("Id")} " +
+            $"DELETE FROM {Table(Schema.Authorizations)} WHERE {Dialect.BuildExactStringEquals(Column("Id"), "Id")} " +
             $"AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "ConcurrencyToken")}",
             new { Id = entity.Id, ConcurrencyToken = entity.ConcurrencyToken },
             transaction.Value, cancellationToken).ConfigureAwait(false);
@@ -569,7 +569,7 @@ public class OpenIddictStoreAuthorizationStore<TAuthorization> : OpenIddictStore
                 {Column("Status")} = {Parameter("Status")},
                 {Column("Subject")} = {Parameter("Subject")},
                 {Column("Type")} = {Parameter("Type")}
-            WHERE {Column("Id")} = {Parameter("Id")}
+            WHERE {Dialect.BuildExactStringEquals(Column("Id"), "Id")}
               AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "Previous")}",
             parameters, transaction.Value, cancellationToken).ConfigureAwait(false);
 

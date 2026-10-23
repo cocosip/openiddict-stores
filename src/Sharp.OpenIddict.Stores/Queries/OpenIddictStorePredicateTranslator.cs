@@ -241,9 +241,15 @@ internal sealed class OpenIddictStorePredicateTranslator
                 $"column '{column.Column.Property}' does not support range comparison (design 9.2).");
         }
 
+        // The predicate below always puts the column on the left. When the caller wrote it on the right
+        // (`cutoff > t.CreationDate`), the operator has to be mirrored with it, otherwise the emitted SQL
+        // expresses the exact opposite of the callback instead of the same thing (design 9).
+        var flipped = !ReferenceEquals(column, left);
+        var other = flipped ? left : right;
+
         if (column.Column.Kind == OpenIddictStoreColumnKind.Date)
         {
-            return TranslateDateComparison(binary, column, ReferenceEquals(column, left) ? right : left);
+            return TranslateDateComparison(binary, column, other, flipped);
         }
 
         if (column.Column.IsBoundedString)
@@ -253,19 +259,20 @@ internal sealed class OpenIddictStorePredicateTranslator
                 "supported, because a range comparison would depend on the database collation (design 16.1.1).");
         }
 
-        return $"{column.Sql} {Operator(binary.NodeType)} {BindOperand(ReferenceEquals(column, left) ? right : left)}";
+        return $"{column.Sql} {Operator(binary.NodeType, flipped)} {BindOperand(other)}";
     }
 
     /// <summary>
     /// A nullable date comparison is false whenever either side is NULL, so the predicate must also
-    /// require both sides to be non-null (design 9.1).
+    /// require both sides to be non-null (design 9.1). <c>flipped</c> is true when the column was the
+    /// callback's right operand, so the operator is mirrored to keep the column on the left of the SQL.
     /// </summary>
-    private string TranslateDateComparison(BinaryExpression binary, Operand column, Operand other)
+    private string TranslateDateComparison(BinaryExpression binary, Operand column, Operand other, bool flipped)
     {
         var formatted = FormatDateOperand(other);
         var bothNotNull = $"({column.Sql} IS NOT NULL AND {formatted} IS NOT NULL)";
 
-        return $"({bothNotNull} AND {column.Sql} {Operator(binary.NodeType)} {formatted})";
+        return $"({bothNotNull} AND {column.Sql} {Operator(binary.NodeType, flipped)} {formatted})";
     }
 
     /// <summary>Renders an operand as executable SQL: a column as-is, a value as a bound parameter.</summary>
@@ -474,12 +481,19 @@ internal sealed class OpenIddictStorePredicateTranslator
             ? sql
             : "(" + sql + ")";
 
-    private static string Operator(ExpressionType type) => type switch
+    private static string Operator(ExpressionType type, bool flipped) => (type, flipped) switch
     {
-        ExpressionType.LessThan => "<",
-        ExpressionType.LessThanOrEqual => "<=",
-        ExpressionType.GreaterThan => ">",
-        ExpressionType.GreaterThanOrEqual => ">=",
+        (ExpressionType.LessThan, false) => "<",
+        (ExpressionType.LessThanOrEqual, false) => "<=",
+        (ExpressionType.GreaterThan, false) => ">",
+        (ExpressionType.GreaterThanOrEqual, false) => ">=",
+
+        // Mirrored operators for a column that was written on the right of the callback's comparison.
+        (ExpressionType.LessThan, true) => ">",
+        (ExpressionType.LessThanOrEqual, true) => ">=",
+        (ExpressionType.GreaterThan, true) => "<",
+        (ExpressionType.GreaterThanOrEqual, true) => "<=",
+
         _ => throw new NotSupportedException($"The operator '{type}' is not supported."),
     };
 

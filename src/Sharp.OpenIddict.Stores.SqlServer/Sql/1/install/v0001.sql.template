@@ -1,4 +1,4 @@
--- Sharp.OpenIddict.Stores — SQL Server 7 / v0001 install script TEMPLATE
+-- Sharp.OpenIddict.Stores — SQL Server 1 / v0001 install script TEMPLATE
 -- This file is not executable as-is: the prefix and schema placeholders must be rendered first (see Sql/README.md).
 -- Target: SQL Server 2016 (13.x) or later, default collation; install into an empty database.
 -- Source version: none (install script); target: Series 1 / Version 1.
@@ -7,8 +7,15 @@
 --   placeholder becomes the quoted schema including the trailing dot, or nothing for the default schema.
 -- Batching: the script contains no GO separator, so it can be executed by a single client session or by an ADO.NET command loop.
 -- Deletion: every foreign key is NO ACTION; the Store performs the associated deletes explicitly (design 16.2.1).
--- Exact comparisons: the Store applies COLLATE LATIN1_GENERAL_100_BIN2 plus DATALENGTH checks at query time;
--- the physical unique indexes below use a binary collation so that their uniqueness matches that contract.
+-- Exact comparisons: every exactly-compared column is declared COLLATE Latin1_GENERAL_100_BIN2, so the
+-- physical collation agrees with the collation the predicate forces. A mismatch would make the predicate
+-- non-sargable and would leave the conditional writes at the mercy of the database default. The Store still
+-- applies COLLATE plus DATALENGTH checks at query time, which keeps hand-created tables correct too.
+
+-- Any failure dooms the transaction instead of leaving it open for a client that catches the error and keeps
+-- the connection: THROW alone does not roll back, so without this the rollback would depend on the client
+-- dropping the connection (design 10.3).
+SET XACT_ABORT ON;
 
 BEGIN TRANSACTION;
 
@@ -17,8 +24,8 @@ IF OBJECT_ID(N'__SCHEMA____PREFIX__Applications', N'U') IS NOT NULL
     THROW 50000, N'The OpenIddict schema is already installed; this script only runs against an empty target.', 1;
 
 CREATE TABLE __SCHEMA__[__PREFIX__Applications] (
-    [Id] nvarchar(100) NOT NULL,
-    [ConcurrencyToken] nvarchar(50) NOT NULL,
+    [Id] nvarchar(100) COLLATE Latin1_General_100_BIN2 NOT NULL,
+    [ConcurrencyToken] nvarchar(50) COLLATE Latin1_General_100_BIN2 NOT NULL,
     [ApplicationType] nvarchar(50) NULL,
     [ClientId] nvarchar(100) COLLATE Latin1_General_100_BIN2 NULL,
     [ClientSecret] nvarchar(max) NULL,
@@ -37,23 +44,23 @@ CREATE TABLE __SCHEMA__[__PREFIX__Applications] (
 );
 
 CREATE TABLE __SCHEMA__[__PREFIX__Authorizations] (
-    [Id] nvarchar(100) NOT NULL,
-    [ConcurrencyToken] nvarchar(50) NOT NULL,
-    [ApplicationId] nvarchar(100) NULL,
+    [Id] nvarchar(100) COLLATE Latin1_General_100_BIN2 NOT NULL,
+    [ConcurrencyToken] nvarchar(50) COLLATE Latin1_General_100_BIN2 NOT NULL,
+    [ApplicationId] nvarchar(100) COLLATE Latin1_General_100_BIN2 NULL,
     [CreationDate] datetime2(6) NULL,
     [Properties] nvarchar(max) NULL,
     [Scopes] nvarchar(max) NULL,
-    [Status] nvarchar(50) NULL,
-    [Subject] nvarchar(400) NULL,
-    [Type] nvarchar(50) NULL,
+    [Status] nvarchar(50) COLLATE Latin1_General_100_BIN2 NULL,
+    [Subject] nvarchar(400) COLLATE Latin1_General_100_BIN2 NULL,
+    [Type] nvarchar(50) COLLATE Latin1_General_100_BIN2 NULL,
     CONSTRAINT [PK___PREFIX__Authorizations] PRIMARY KEY ([Id]),
     CONSTRAINT [FK___PREFIX__Authorizations_Applications_ApplicationId]
         FOREIGN KEY ([ApplicationId]) REFERENCES __SCHEMA__[__PREFIX__Applications] ([Id])
 );
 
 CREATE TABLE __SCHEMA__[__PREFIX__Scopes] (
-    [Id] nvarchar(100) NOT NULL,
-    [ConcurrencyToken] nvarchar(50) NOT NULL,
+    [Id] nvarchar(100) COLLATE Latin1_General_100_BIN2 NOT NULL,
+    [ConcurrencyToken] nvarchar(50) COLLATE Latin1_General_100_BIN2 NOT NULL,
     [Description] nvarchar(max) NULL,
     [Descriptions] nvarchar(max) NULL,
     [DisplayName] nvarchar(max) NULL,
@@ -65,19 +72,19 @@ CREATE TABLE __SCHEMA__[__PREFIX__Scopes] (
 );
 
 CREATE TABLE __SCHEMA__[__PREFIX__Tokens] (
-    [Id] nvarchar(100) NOT NULL,
-    [ConcurrencyToken] nvarchar(50) NOT NULL,
-    [ApplicationId] nvarchar(100) NULL,
-    [AuthorizationId] nvarchar(100) NULL,
+    [Id] nvarchar(100) COLLATE Latin1_General_100_BIN2 NOT NULL,
+    [ConcurrencyToken] nvarchar(50) COLLATE Latin1_General_100_BIN2 NOT NULL,
+    [ApplicationId] nvarchar(100) COLLATE Latin1_General_100_BIN2 NULL,
+    [AuthorizationId] nvarchar(100) COLLATE Latin1_General_100_BIN2 NULL,
     [CreationDate] datetime2(6) NULL,
     [ExpirationDate] datetime2(6) NULL,
     [Payload] nvarchar(max) NULL,
     [Properties] nvarchar(max) NULL,
     [RedemptionDate] datetime2(6) NULL,
     [ReferenceId] nvarchar(100) COLLATE Latin1_General_100_BIN2 NULL,
-    [Status] nvarchar(50) NULL,
-    [Subject] nvarchar(400) NULL,
-    [Type] nvarchar(150) NULL,
+    [Status] nvarchar(50) COLLATE Latin1_General_100_BIN2 NULL,
+    [Subject] nvarchar(400) COLLATE Latin1_General_100_BIN2 NULL,
+    [Type] nvarchar(150) COLLATE Latin1_General_100_BIN2 NULL,
     CONSTRAINT [PK___PREFIX__Tokens] PRIMARY KEY ([Id]),
     CONSTRAINT [FK___PREFIX__Tokens_Applications_ApplicationId]
         FOREIGN KEY ([ApplicationId]) REFERENCES __SCHEMA__[__PREFIX__Applications] ([Id]),
@@ -86,7 +93,7 @@ CREATE TABLE __SCHEMA__[__PREFIX__Tokens] (
 );
 
 CREATE TABLE __SCHEMA__[__PREFIX__ApplicationRedirectUris] (
-    [ApplicationId] nvarchar(100) NOT NULL,
+    [ApplicationId] nvarchar(100) COLLATE Latin1_General_100_BIN2 NOT NULL,
     [UriHash] binary(32) NOT NULL,
     [Uri] nvarchar(max) NOT NULL,
     [Position] int NOT NULL,
@@ -96,7 +103,7 @@ CREATE TABLE __SCHEMA__[__PREFIX__ApplicationRedirectUris] (
 );
 
 CREATE TABLE __SCHEMA__[__PREFIX__ApplicationPostLogoutRedirectUris] (
-    [ApplicationId] nvarchar(100) NOT NULL,
+    [ApplicationId] nvarchar(100) COLLATE Latin1_General_100_BIN2 NOT NULL,
     [UriHash] binary(32) NOT NULL,
     [Uri] nvarchar(max) NOT NULL,
     [Position] int NOT NULL,
@@ -106,7 +113,7 @@ CREATE TABLE __SCHEMA__[__PREFIX__ApplicationPostLogoutRedirectUris] (
 );
 
 CREATE TABLE __SCHEMA__[__PREFIX__AuthorizationScopes] (
-    [AuthorizationId] nvarchar(100) NOT NULL,
+    [AuthorizationId] nvarchar(100) COLLATE Latin1_General_100_BIN2 NOT NULL,
     [ScopeHash] binary(32) NOT NULL,
     [Scope] nvarchar(max) NOT NULL,
     [Position] int NOT NULL,

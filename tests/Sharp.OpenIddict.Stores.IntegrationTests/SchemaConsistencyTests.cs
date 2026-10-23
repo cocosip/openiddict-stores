@@ -202,9 +202,9 @@ public sealed class SchemaConsistencyTests
 
     /// <summary>
     /// A unique key on a string column must not depend on a case-insensitive server default, or the database
-    /// would reject "Client" as a duplicate of "client" while the Store treats them as different values. Only
-    /// the three business unique keys carry a column collation: the other comparison columns are forced in the
-    /// query predicate instead, which the dialect tests cover (design 16.1.1).
+    /// would reject "Client" as a duplicate of "client" while the Store treats them as different values. The
+    /// unique keys are a subset of the columns covered by <see cref="ExactComparedColumns_DeclareTheBinaryCollation"/>;
+    /// this test pins the three business keys specifically (design 16.1.1).
     /// </summary>
     [Theory]
     [InlineData("SqlServer", "Latin1_General_100_BIN2")]
@@ -222,6 +222,38 @@ public sealed class SchemaConsistencyTests
 
             Assert.True(declaration.Contains("COLLATE", StringComparison.OrdinalIgnoreCase),
                 $"{provider}: {table}.{column} is a unique key and needs its own collation.");
+
+            Assert.Contains(expected, declaration, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Every column the stores compare exactly must carry the binary collation in the DDL, not only inside the
+    /// predicate. Forcing <c>COLLATE</c> onto a column declared with a different collation makes the predicate
+    /// non-sargable (a seek becomes a scan on the primary key, the hottest lookup in the library), and the
+    /// conditional writes that compare <c>Id</c> would otherwise depend on the database default: on a
+    /// case-insensitive database an update for <c>ABC</c> would hit the row stored as <c>abc</c> while the read
+    /// path for the same string returns null (design 16.1.1).
+    /// </summary>
+    [Theory]
+    [InlineData("SqlServer", "Latin1_General_100_BIN2")]
+    public void ExactComparedColumns_DeclareTheBinaryCollation(string provider, string expected)
+    {
+        var tables = Parse(provider);
+
+        foreach (var (table, column) in new[]
+                 {
+                     ("Applications", "Id"), ("Applications", "ConcurrencyToken"), ("Applications", "ClientId"),
+                     ("Authorizations", "Id"), ("Authorizations", "ConcurrencyToken"),
+                     ("Authorizations", "ApplicationId"), ("Authorizations", "Status"),
+                     ("Authorizations", "Subject"), ("Authorizations", "Type"),
+                     ("Scopes", "Id"), ("Scopes", "ConcurrencyToken"), ("Scopes", "Name"),
+                     ("Tokens", "Id"), ("Tokens", "ConcurrencyToken"), ("Tokens", "ApplicationId"),
+                     ("Tokens", "AuthorizationId"), ("Tokens", "ReferenceId"), ("Tokens", "Status"),
+                     ("Tokens", "Subject"), ("Tokens", "Type")
+                 })
+        {
+            var declaration = tables[table].Single(candidate => candidate.Name == column).Declaration;
 
             Assert.Contains(expected, declaration, StringComparison.Ordinal);
         }

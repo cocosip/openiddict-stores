@@ -1,5 +1,5 @@
--- Sharp.OpenIddict.Stores — SQLite 7 / v0001 install script TEMPLATE
--- This file is not executable as-is: __PREFIX__ and __SCHEMA__ must be rendered first (see Sql/README.md).
+-- Sharp.OpenIddict.Stores — SQLite 1 / v0001 install script TEMPLATE
+-- This file is not executable as-is: __PREFIX__ must be rendered first (see Sql/README.md).
 -- Target: SQLite 3.35.0 or later; install into an empty database.
 -- Source version: none (install script); target: Series 1 / Version 1.
 -- Transaction boundary: the whole script runs in a single transaction; any failing statement rolls back, leaving no partial structures.
@@ -151,7 +151,9 @@ CREATE INDEX "IX___PREFIX__AuthorizationScopes_ScopeHash_AuthorizationId"
 CREATE INDEX "IX___PREFIX__ScopeResources_ResourceHash_ScopeId"
     ON "__PREFIX__ScopeResources" ("ResourceHash", "ScopeId");
 
+-- The seed date uses the dialect's own fixed text format (yyyy-MM-dd HH:mm:ss.ffffff) rather than an
+-- ISO-8601 'T...Z' form, so the column never carries two representations of the same instant.
 INSERT INTO "__PREFIX__SchemaVersions" ("Series", "Version", "UpdatedUtc")
-VALUES ('1', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+VALUES ('1', 1, strftime('%Y-%m-%d %H:%M:%f', 'now'));
 
 COMMIT;

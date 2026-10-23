@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace Sharp.OpenIddict.Stores.IntegrationTests;
@@ -80,6 +81,73 @@ public sealed class SqlAssetTests
             // The declaration and the file have to agree, otherwise a deployment misses a placeholder.
             Assert.Equal(tokens.OrderBy(token => token, StringComparer.Ordinal),
                 TokensIn(text).OrderBy(token => token, StringComparer.Ordinal));
+        }
+    }
+
+    /// <summary>
+    /// A template's header is what a DBA reads before running it, so it must state the same series the file
+    /// actually installs. Three headers kept the pre-renumbering "7" long after the directory, the seed
+    /// record, and the manifest had moved to series 1 — a stale comment on a script is a wrong instruction.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public void TemplateHeader_StatesTheSeriesTheScriptInstalls(string provider)
+    {
+        var root = Path.Combine(RepositoryRoot, "src", $"Sharp.OpenIddict.Stores.{provider}", "Sql");
+
+        if (!Directory.Exists(root))
+        {
+            return;
+        }
+
+        foreach (var file in EnumerateScripts(root))
+        {
+            var header = File.ReadLines(file).First(line => line.StartsWith("--", StringComparison.Ordinal));
+
+            // Only the product banner carries a series number; MySQL's banner names its servers instead.
+            var banner = Regex.Match(header, @"\s(\d+)\s+/\s+v\d{4}\b");
+
+            if (!banner.Success)
+            {
+                continue;
+            }
+
+            Assert.True(banner.Groups[1].Value == OpenIddictStoreSchema.RequiredSeries,
+                $"{Path.GetFileName(file)} is headed with series {banner.Groups[1].Value} but installs " +
+                $"series {OpenIddictStoreSchema.RequiredSeries}: '{header.Trim()}'.");
+        }
+    }
+
+    /// <summary>
+    /// A header that names a placeholder literally is telling the operator to render it. That claim has to be
+    /// true of the body: SQLite's header demanded <c>__SCHEMA__</c> for a provider that has no schemas, and
+    /// rendering it was impossible. Headers that describe a placeholder in prose are unaffected.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public void TemplateHeader_DoesNotDemandAPlaceholderTheBodyLacks(string provider)
+    {
+        var root = Path.Combine(RepositoryRoot, "src", $"Sharp.OpenIddict.Stores.{provider}", "Sql");
+
+        if (!Directory.Exists(root))
+        {
+            return;
+        }
+
+        foreach (var file in EnumerateScripts(root))
+        {
+            var lines = File.ReadAllLines(file);
+            var header = string.Join("\n", lines.Where(line => line.TrimStart().StartsWith("--", StringComparison.Ordinal)));
+            var body = string.Join("\n", lines.Where(line => !line.TrimStart().StartsWith("--", StringComparison.Ordinal)));
+
+            foreach (var token in new[] { "__PREFIX__", "__SCHEMA__" })
+            {
+                if (header.Contains(token, StringComparison.Ordinal))
+                {
+                    Assert.True(body.Contains(token, StringComparison.Ordinal),
+                        $"{Path.GetFileName(file)}: the header names {token} but the body never uses it.");
+                }
+            }
         }
     }
 

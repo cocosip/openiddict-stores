@@ -114,6 +114,64 @@ public sealed class ParameterBindingContractTests
         Assert.Contains(parameterized, command => command.Parameters.Values.Contains("https://example.org/a@b"));
     }
 
+    /// <summary>
+    /// A conditional write must compare the key exactly like a read does. Every store looked rows up with
+    /// <c>BuildExactStringEquals</c> but wrote them with a plain <c>Id = @Id</c>, so on a case-insensitive
+    /// database (SQL Server with a CI default collation) an update or delete for <c>ABC</c> silently hit the
+    /// row stored as <c>abc</c> while <c>FindByIdAsync</c> for the same string returned null (design 16.1.1
+    /// requires the same exactness from queries and conditional writes).
+    /// </summary>
+    [Fact]
+    public async Task ConditionalWrites_CompareTheKeyExactlyLikeReadsDo()
+    {
+        var factory = new RecordingFactory();
+        var options = Options.Create(new OpenIddictStoreOptions());
+
+        // PostgreSQL and SQL Server are the two dialects whose exact predicate differs textually from a plain
+        // '='; using one of them makes the assertion meaningful instead of trivially true.
+        var dialect = OpenIddictStoreSqlServerDialect.Instance;
+        var exact = dialect.BuildExactStringEquals(dialect.QuoteIdentifier("Id"), "Id");
+
+        var applications = new OpenIddictStoreApplicationStore<OpenIddictStoreApplication>(
+            options, factory, dialect, NullLogger<OpenIddictStoreApplicationStore<OpenIddictStoreApplication>>.Instance);
+        var scopes = new OpenIddictStoreScopeStore<OpenIddictStoreScope>(
+            options, factory, dialect, NullLogger<OpenIddictStoreScopeStore<OpenIddictStoreScope>>.Instance);
+        var tokens = new OpenIddictStoreTokenStore<OpenIddictStoreToken>(
+            options, factory, dialect, NullLogger<OpenIddictStoreTokenStore<OpenIddictStoreToken>>.Instance);
+
+        var application = new OpenIddictStoreApplication { Id = "abc", ConcurrencyToken = "ct" };
+        var scope = new OpenIddictStoreScope { Id = "abc", ConcurrencyToken = "ct" };
+        var token = new OpenIddictStoreToken { Id = "abc", ConcurrencyToken = "ct" };
+
+        // Updates and deletes are the paths that write conditionally; a stale token is fine, the statement
+        // shape is what matters and the recording command reports one affected row.
+        try { await applications.UpdateAsync(application, default); } catch { }
+        try { await applications.DeleteAsync(application, default); } catch { }
+        try { await scopes.UpdateAsync(scope, default); } catch { }
+        try { await scopes.DeleteAsync(scope, default); } catch { }
+        try { await tokens.UpdateAsync(token, default); } catch { }
+        try { await tokens.DeleteAsync(token, default); } catch { }
+
+        var writes = factory.Commands
+            .Where(command => command.Sql.StartsWith("UPDATE", StringComparison.Ordinal)
+                           || command.Sql.StartsWith("DELETE", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.NotEmpty(writes);
+
+        // The exact predicate is the only thing that pins the key; a bare '[Id] = @...' means the write can
+        // hit a case- or trailing-space-variant row on a case-insensitive database. Cascade deletes keyed by
+        // the foreign key (ApplicationId, AuthorizationId) are out of scope here: they are scoped by a parent
+        // row the exact predicate already identified.
+        Assert.All(writes, command =>
+            Assert.False(Regex.IsMatch(command.Sql, @"\[Id\]\s*=\s*@"),
+                $"A conditional write compares the key inexactly: {command.Sql}"));
+
+        // At least one statement must actually carry the exact identity predicate, otherwise the assertion
+        // above would pass on a dialect that emits no conditional write at all.
+        Assert.Contains(writes, command => command.Sql.Contains(exact, StringComparison.Ordinal));
+    }
+
     [Fact]
     public void OracleCommand_BindsReorderedAndRepeatedParametersByName()
     {

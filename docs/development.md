@@ -885,6 +885,28 @@ dotnet pack Sharp.OpenIddict.Stores.slnx --configuration Release --no-build --ou
 - 验证命令与结果：`dotnet build Sharp.OpenIddict.Stores.slnx -c Release` 0 警告 0 错误；`dotnet test ... -c Release --no-build` 通过 **453 项（121 单元 + 332 集成），16 项跳过**（真实 SQL Server 套件，如实跳过）。
 - 结果与缺口：达梦三模式方言经官方文档复核与 E-044 真库验收双重确认，本轮无 DM 行为变更（仅注释修正与新增空串标志）；走查报告中的"DM 两方言 BuildPaging 重复"按 README 声明的模式独立演进意图保留不并。本轮改动未提交，是否入库由用户决定。
 
+### E-046：全 provider 走查（达梦多模式脚本口径）与九类缺陷修复
+
+- 任务：全库代码走查（无任务清单编号，用户发起），起点是"达梦支持多种模式，SQL 脚本到底生成一套还是多套"；系列：1.x。
+- 日期：2026-10-23；实现：本次提交。
+- 走查范围：六个 provider 全部纳入（SqlServer、PostgreSql、MySql、Sqlite、Oracle、Dm 三模式）+ 共享运行时（谓词翻译器、列映射、会话与事务、四个 Store）+ SQL 生成工具 + 六套 SQL 资产与文档。SQL Server/PostgreSQL 与 Oracle/MySQL 两组由并行子代理逐文件复核，关键论断二次人工验证；涉及引擎行为的争议一律查权威手册。
+- 达梦脚本口径结论（用户直接问题）：`COMPATIBLE_MODE` 是实例级参数，代码声明 0/2/4 三种模式，**当前按模式生成三套脚本**（三份模板、manifest 三条目、三个 SHA-256、三个方言类），`UseDm(mode)` 与 `SqlTool --mode` 对应选择。三份模板的 DDL 正文逐字节一致（已实测 136 行相同，且有测试锁定），因为达梦类型系统不受 `COMPATIBLE_MODE` 门控，随模式变化的只是运行时 SQL（分页子句、空串语义）。因此按模式分文件成立，但 MySQL 兼容模式目前与原生方言行为等价且无真库验收，列为待修第 2 项（补证据或砍掉，需产品决策）。
+- 修复清单（详细描述见 `docs/walkthrough-findings.md` 第 1 轮）：
+  1. **反向日期比较生成相反谓词**（阻断）：谓词翻译器把列归一化到 SQL 左侧却未镜像运算符，`cutoff > t.CreationDate` 翻译成 `CreationDate > @cutoff`。修 `OpenIddictStorePredicateTranslator`，日期与普通列两路径共用 `flipped`。
+  2. **条件写入用裸 `=` 比较 Id**（阻断）：四个 Store 共 8 处 CAS 更新/删除用 `{Column("Id")} = {Parameter("Id")}`，而读路径走精确谓词；大小写不敏感库上更新会静默命中变体行。全部改走 `BuildExactStringEquals`，与设计 16.1.1"查询与条件写入同等精确"一致。
+  3. **`DisplayName` 列映射类型错误**（重大）：映射声明为有界可比较字符串，六个模板实际全是 LOB，Oracle/达梦上 `NLSSORT` 作用于 CLOB 会报错；改为 `LargeText`，与设计 523/525 行及 `SchemaConsistencyTests` 对齐。
+  4. **SQL Server 契约测试查系列 7**（重大）：`Series = N'7'` 与模板种子 `'1'` 不符，永远查不到行；根因是验收项目故意不入 solution、从不编译。改为引用 `OpenIddictStoreSchema` 常量。
+  5. **SQL Server 精确比较列缺列级二进制排序规则**（重大）：20 个精确比较列用库默认排序规则，谓词强制的 `COLLATE` 与列声明不一致使主键查找退化扫描，且第 2 项在无列级排序规则时仍不安全。全部补齐并新增防退化测试。
+  6. **事务提交失败后跳过回滚**（重大）：`_committed` 在 `await CommitAsync` 之前置位。
+  7. **SQL Server 安装脚本不能保证回滚**（中等）：`THROW` 在 `XACT_ABORT OFF` 下不回滚；加 `SET XACT_ABORT ON`，README 同步说明。
+  8. **SQLite 日期处理三处**（中等/轻微）：`ReadDate` 缺 `IsDBNull` 守卫；`ParseDateTime` 用 `DateTimeStyles.None` 把 `Z` 当本地时间；种子日期格式与方言写入格式不一致。
+  9. **模板头部与正文不一致**（轻微）：三个模板标题残留系列 `7`；SQLite 模板头部要求渲染它并不使用的 `__SCHEMA__`。
+  10. **SqlTool 四处静默行为**（重大/轻微）：无值 flag 静默回退默认值；`--schema` 对 MySql/Sqlite 静默丢弃；忽略 manifest `type` 会把 upgrade 条目当安装脚本；`--list` 把三个达梦模式全报成原生方言。
+- 测试：新增 9 项——单元 +1（SqlTool `--list` 只暴露 install 条目）；集成 +8（反向日期比较两方向、条件写入精确谓词、SQL Server 精确列排序规则、模板头部系列号、模板头部占位符、SqlTool schema 拒绝理论 ×2、SQLite 种子日期 UTC 断言）。改写 1 项（SQL Server 两条系列断言改用常量）。其中"条件写入精确谓词"经回退代码验证确实会失败，"反向日期比较"先写失败测试再修。
+- 验证命令与结果：`pwsh ./scripts/verify.ps1` 全绿——Restore 2.5s、Build（全 TFM 非增量）11.6s、Pack 8 包 2.8s、测试 13.4s；`dotnet build` 0 警告 0 错误；测试 **454 项通过（124 单元 + 330 集成），16 项跳过**（真实 SQL Server 套件，如实跳过）。
+- 排除的误报（经核实不成立，不改）：SQLite `GetInt32` 抛 `InvalidCastException`（本地实测正常）；Oracle `OFFSET` 单独使用非法（Oracle 19c 语法中 `OFFSET`/`FETCH` 各自可选）；MySQL `BINARY @p` 不精确（手册示例 `BINARY 'a' = 'a '` 返回 0）；唯一键冲突未翻译（现有测试明确断言裸驱动异常，属既定契约）。
+- 结果与缺口：Oracle 与 MySQL 本轮只有静态走查与权威手册核对，无真库运行（本地约束不连接服务端）；待修项共 8 条已按严重度记入 `docs/walkthrough-findings.md`，其中达梦 `CASE_SENSITIVE=0` 探针为唯一仍可能导致静默错误数据的点。本轮不改变任务勾选状态。
+
 
 后续任务完成时复制以下模板并填写，再勾选任务；同一任务有多个系列或环境时分别列明，不覆盖过去的失败/修复记录。
 ```text
@@ -927,15 +949,16 @@ dotnet pack Sharp.OpenIddict.Stores.slnx --configuration Release --no-build --ou
 
 ### 9.1 当前状态快照
 
-- 已完成 **33 / 50** 项（CI-01 部分完成，未计入；2026-10-20 新增交付：达梦三种声明兼容模式 E-040、SQL 生成工具 E-041、CI/CD 工作流 E-042、门禁顺序修复 E-039、包版本与架构 Series 自主编号 E-043，均不改变任务勾选状态；同日 DB-03/DB-06 勾选、DB-07 两模式验收完成；2026-10-21 全库走查缺陷修复 E-045，不改变任务勾选状态）。全部完成的阶段：P0 文档基线、P2 工程与基础设施（ENG-01～ENG-05）、P3 SQLite 基础读写（6/6）、P6 多目标与包资产（4/4）；P4 的 QUERY-01～03 与 LIFE-01～04 完成。六 provider 的方言与安装脚本模板均已交付（E-029～E-033），**DB-01（SQLite）、DB-02（SQL Server）、DB-03（PostgreSQL）、DB-06（Oracle）、DB-07 的原生与 Oracle 兼容模式有真库验收记录**（E-044），DB-04/DB-05 与 DB-07 的 MySQL 兼容模式真库一栏按 §5 记“未验证”（见下方约束与 E-028）。本地基线：453 项通过（121 单元 + 332 集成），16 项跳过，8 个包；门禁入口 `scripts/verify.ps1`（E-036，打包先于测试的顺序见 E-039）。基线已整体提交并纳入版本控制（E-025、E-026、E-029）。
-- 验证基线（本地，无任何数据库服务器）：`dotnet build Sharp.OpenIddict.Stores.slnx -c Release` 0 警告 0 错误；`dotnet pack -o artifacts` 产出 8 个包；`dotnet test` 通过 **453 项（121 单元 + 332 集成），16 项显式跳过**——跳过的是 `SqlServerStoreContractTests`，需要真实 SQL Server。任何改动的底线是不低于这组数字，且跳过项不得减少。真库验收证据（E-044）由 `tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests/` 在用户提供的服务器上产生，不进入该基线，也不因缺少服务器而降低。
+- 已完成 **33 / 50** 项（CI-01 部分完成，未计入；2026-10-20 新增交付：达梦三种声明兼容模式 E-040、SQL 生成工具 E-041、CI/CD 工作流 E-042、门禁顺序修复 E-039、包版本与架构 Series 自主编号 E-043，均不改变任务勾选状态；同日 DB-03/DB-06 勾选、DB-07 两模式验收完成；2026-10-21 全库走查缺陷修复 E-045、2026-10-23 全 provider 走查 E-046，均不改变任务勾选状态）。全部完成的阶段：P0 文档基线、P2 工程与基础设施（ENG-01～ENG-05）、P3 SQLite 基础读写（6/6）、P6 多目标与包资产（4/4）；P4 的 QUERY-01～03 与 LIFE-01～04 完成。六 provider 的方言与安装脚本模板均已交付（E-029～E-033），**DB-01（SQLite）、DB-02（SQL Server）、DB-03（PostgreSQL）、DB-06（Oracle）、DB-07 的原生与 Oracle 兼容模式有真库验收记录**（E-044），DB-04/DB-05 与 DB-07 的 MySQL 兼容模式真库一栏按 §5 记“未验证”（见下方约束与 E-028）。本地基线：454 项通过（124 单元 + 330 集成），16 项跳过，8 个包；门禁入口 `scripts/verify.ps1`（E-036，打包先于测试的顺序见 E-039）。基线已整体提交并纳入版本控制（E-025、E-026、E-029）。
+- 验证基线（本地，无任何数据库服务器）：`dotnet build Sharp.OpenIddict.Stores.slnx -c Release` 0 警告 0 错误；`dotnet pack -o artifacts` 产出 8 个包；`dotnet test` 通过 **454 项（124 单元 + 330 集成），16 项显式跳过**——跳过的是 `SqlServerStoreContractTests`，需要真实 SQL Server。任何改动的底线是不低于这组数字，且跳过项不得减少。真库验收证据（E-044）由 `tests/Sharp.OpenIddict.Stores.ServerAcceptanceTests/` 在用户提供的服务器上产生，不进入该基线，也不因缺少服务器而降低。
+- **未修复的走查问题集中在 `docs/walkthrough-findings.md`**（E-046 建立，按严重度排列的活文档）：达梦 `CASE_SENSITIVE=0` 启动探针（阻断，唯一仍可能导致静默错误数据的点）、达梦 MySQL 兼容模式补证据或砍掉（重大）、PostgreSQL 摘要列宽度约束、标识符字节/字符注释、SqlTool 升级路径、`BuildPaging` 接口契约注释、`§9.2` 历史路径。修复前请先读该文档，避免与已排除的误报重复排查。
 - 已具备的能力：四类 Store 的全部 145 个成员、集合索引（JSON 权威 + SHA-256 候选 + Ordinal 复核）、Update CAS、七种批量撤销、Prune 清理、关联删除矩阵、IQueryable 回调翻译、逐行异步读取、五 TFM 与分 TFM 依赖组、八个包资产、六套方言（SQLite、SQL Server、PostgreSQL、MySQL/MariaDB、Oracle、达梦三种声明模式）、SQL 部署脚本生成工具（`tools/`，E-041）、CI/CD 工作流（`.github/workflows/ci-cd.yml`，E-042）。
 - 仓库不提交 `global.json`（E-027）：工程只要求 .NET 10，换机器不会因补丁号对不上而构建失败。
 - **不执行任何需要连接数据库服务端的测试**（§3 的硬约束）。SQL Server 与 PostgreSQL 等外部服务器验收由用户环境执行；本地只有 SQLite 文件库是真库证据。
 
 ### 9.2 下一步：DB-03 余下的真库部分，或按序推进其他 provider
 
-DB-03 的**实现已交付**（E-029）：`OpenIddictStorePostgreSqlDialect`、`UsePostgreSql()`、`Sql/7/install/v0001.sql.template` + manifest + README，全部靠静态走查与本地方案内测试验证。剩下的是需要 PostgreSQL 服务器的部分（`DSH_POSTGRESQL` 一套真库合同），**按 §3 约束不在本仓库执行**，留给用户环境。
+DB-03 的**实现已交付**（E-029）：`OpenIddictStorePostgreSqlDialect`、`UsePostgreSql()`、`Sql/1/install/v0001.sql.template` + manifest + README，全部靠静态走查与本地方案内测试验证。剩下的是需要 PostgreSQL 服务器的部分（`DSH_POSTGRESQL` 一套真库合同），**按 §3 约束不在本仓库执行**，留给用户环境。
 
 MIG-01 已完成（E-030）：运行时首次使用前校验 `Series`/`Version`，不一致即拒绝并指出所需版本，不自动改库。
 

@@ -43,12 +43,13 @@ internal static class Program
         {
             foreach (var item in DeploymentScriptFactory.ListProviders())
             {
-                Console.WriteLine($"{item.Name}  (dialect: {item.Dialect.GetType().Name})");
+                Console.WriteLine(item.Name);
 
                 foreach (var entry in item.Entries)
                 {
                     Console.WriteLine($"    server: {entry.Server}"
                         + (entry.MinimumVersion is null ? string.Empty : $"  (minimum {entry.MinimumVersion})"));
+                    Console.WriteLine($"    dialect: {entry.Dialect.GetType().Name}");
                     Console.WriteLine($"    script: {entry.Path}");
                     Console.WriteLine($"    sha256: {entry.Sha256}");
                 }
@@ -86,9 +87,19 @@ internal static class Program
     {
         var index = Array.FindIndex(args, arg => string.Equals(arg, name, StringComparison.Ordinal));
 
-        return index < 0 || index + 1 >= args.Length
-            ? null
-            : args[index + 1];
+        if (index < 0)
+        {
+            return null;
+        }
+
+        // A flag that is present but carries no value is a caller error, not "use the default": silently
+        // falling back would render tables under the default prefix the application never looks up.
+        if (index + 1 >= args.Length)
+        {
+            throw new ArgumentException($"The {name} option requires a value.");
+        }
+
+        return args[index + 1];
     }
 
     private static string Usage() => """

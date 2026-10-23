@@ -114,7 +114,7 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
             new { Id = entity.Id }, transaction.Value, cancellationToken).ConfigureAwait(false);
 
         var affected = await session.ExecuteAsync(
-            $"DELETE FROM {Table(Schema.Scopes)} WHERE {Column("Id")} = {Parameter("Id")} " +
+            $"DELETE FROM {Table(Schema.Scopes)} WHERE {Dialect.BuildExactStringEquals(Column("Id"), "Id")} " +
             $"AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "ConcurrencyToken")}",
             new { Id = entity.Id, ConcurrencyToken = entity.ConcurrencyToken },
             transaction.Value, cancellationToken).ConfigureAwait(false);
@@ -403,7 +403,7 @@ public class OpenIddictStoreScopeStore<TScope> : OpenIddictStoreBase, IOpenIddic
                 {Column("Name")} = {Parameter("Name")},
                 {Column("Properties")} = {Parameter("Properties")},
                 {Column("Resources")} = {Parameter("Resources")}
-            WHERE {Column("Id")} = {Parameter("Id")}
+            WHERE {Dialect.BuildExactStringEquals(Column("Id"), "Id")}
               AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "Previous")}",
             new
             {

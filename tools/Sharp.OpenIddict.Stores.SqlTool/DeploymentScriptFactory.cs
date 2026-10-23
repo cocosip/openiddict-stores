@@ -27,16 +27,22 @@ namespace Sharp.OpenIddict.Stores.SqlTool;
 public static class DeploymentScriptFactory
 {
     /// <summary>One renderable manifest entry of a provider.</summary>
+    /// <remarks>
+    /// <c>Dialect</c> is per entry, not per provider: Dameng ships one dialect per compatibility mode, so a
+    /// provider-wide dialect would misreport two of its three entries (design 5, 10.1).
+    /// </remarks>
     public sealed record ScriptEntry(
         string Provider,
         string Server,
         string? MinimumVersion,
         string Mode,
         string Path,
-        string Sha256);
+        string Sha256,
+        IReadOnlyList<string> RendersTokens,
+        IOpenIddictStoreDialect Dialect);
 
     /// <summary>One provider and the entries it ships.</summary>
-    public sealed record ProviderInfo(string Name, IOpenIddictStoreDialect Dialect, IReadOnlyList<ScriptEntry> Entries);
+    public sealed record ProviderInfo(string Name, IReadOnlyList<ScriptEntry> Entries);
 
     private static readonly (string Name, IOpenIddictStoreDialect Dialect)[] Providers =
     [
@@ -55,7 +61,6 @@ public static class DeploymentScriptFactory
     public static IReadOnlyList<ProviderInfo> ListProviders()
         => Providers.Select(provider => new ProviderInfo(
             provider.Name,
-            provider.Dialect,
             ReadManifest(provider.Name).Entries)).ToArray();
 
     /// <summary>
@@ -72,7 +77,9 @@ public static class DeploymentScriptFactory
         string? schema = null,
         string? server = null)
     {
-        var dialect = DialectFor(provider, mode);
+        // Validates the provider/mode pair before any manifest work, so an unknown mode fails with its own message.
+        DialectFor(provider, mode);
+
         var manifest = ReadManifest(provider);
         var modeName = provider == "Dm" ? (mode ?? DefaultMode) : null;
 
@@ -107,8 +114,18 @@ public static class DeploymentScriptFactory
         }
 
         var entry = distinct[0].First();
+
+        // The runtime rejects a dedicated schema for these providers (OpenIddictStoreOptionsValidator);
+        // the tool must not quietly accept it and produce a script with no schema qualifier.
+        if (!string.IsNullOrEmpty(schema) && !entry.RendersTokens.Contains("__SCHEMA__"))
+        {
+            throw new ArgumentException(
+                $"Provider '{provider}' does not support a dedicated schema: its script has no schema placeholder. " +
+                "Remove --schema, or configure a provider that supports one.");
+        }
+
         var template = ReadResource(provider, entry.Path);
-        var rendered = OpenIddictStoreIdentifiers.RenderDeploymentScript(template, dialect, prefix, schema);
+        var rendered = OpenIddictStoreIdentifiers.RenderDeploymentScript(template, entry.Dialect, prefix, schema);
 
         AssertNoLeftoverTokens(rendered, provider, entry.Path);
 
@@ -152,6 +169,13 @@ public static class DeploymentScriptFactory
 
         foreach (var element in document.RootElement.GetProperty("entries").EnumerateArray())
         {
+            // This tool renders the install script only. An upgrade entry describes a source-to-target
+            // transition and must never be handed to a deployment as the install copy.
+            if (element.GetProperty("type").GetString() != "install")
+            {
+                continue;
+            }
+
             var path = element.GetProperty("path").GetString()!;
 
             entries.Add(new ScriptEntry(
@@ -160,7 +184,14 @@ public static class DeploymentScriptFactory
                 element.TryGetProperty("minimumVersion", out var minimum) ? minimum.GetString() : null,
                 ModeFromPath(path),
                 path,
-                element.GetProperty("sha256").GetString() ?? string.Empty));
+                element.GetProperty("sha256").GetString() ?? string.Empty,
+                element.GetProperty("rendersTokens").EnumerateArray()
+                    .Select(token => token.GetString() ?? string.Empty)
+                    .ToArray(),
+                // Only Dameng has compatibility modes; every other provider's entry renders with its one dialect.
+                DialectFor(provider, string.Equals(provider, "Dm", StringComparison.OrdinalIgnoreCase)
+                    ? ModeFromPath(path)
+                    : null)));
         }
 
         if (entries.Count == 0)

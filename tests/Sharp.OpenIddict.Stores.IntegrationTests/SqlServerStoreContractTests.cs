@@ -175,8 +175,8 @@ public sealed class SqlServerStoreContractTests : IAsyncLifetime
             ],
             filtered);
 
-        Assert.Equal([1], await QueryScalarsAsync<int>(
-            "SELECT Version FROM OpenIddictSchemaVersions WHERE Series = N'7'"));
+        Assert.Equal([OpenIddictStoreSchema.RequiredVersion], await QueryScalarsAsync<int>(
+            $"SELECT Version FROM OpenIddictSchemaVersions WHERE Series = N'{OpenIddictStoreSchema.RequiredSeries}'"));
     }
 
     [ServerFact(ServerVariable, "The SQL Server acceptance suite")]
@@ -219,8 +219,9 @@ public sealed class SqlServerStoreContractTests : IAsyncLifetime
 
         await using (var reads = connection.CreateCommand())
         {
-            reads.CommandText = "SELECT Version FROM auth.OidcSchemaVersions WHERE Series = N'7'";
-            Assert.Equal(1, (int)(await reads.ExecuteScalarAsync())!);
+            reads.CommandText =
+                $"SELECT Version FROM auth.OidcSchemaVersions WHERE Series = N'{OpenIddictStoreSchema.RequiredSeries}'";
+            Assert.Equal(OpenIddictStoreSchema.RequiredVersion, (int)(await reads.ExecuteScalarAsync())!);
         }
 
         var options = Options.Create(new OpenIddictStoreOptions { TablePrefix = "Oidc", Schema = "auth" });

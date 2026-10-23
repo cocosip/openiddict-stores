@@ -85,9 +85,11 @@ public sealed class OpenIddictStoreSqliteDialect : IOpenIddictStoreDialect
 
     /// <inheritdoc />
     public DateTime? ReadDate(System.Data.Common.DbDataReader reader, int ordinal)
-        => reader.GetFieldType(ordinal) == typeof(DateTime)
-            ? OpenIddictStoreJson.AsUtc(reader.GetDateTime(ordinal))
-            : ParseDateTime(reader.GetString(ordinal));
+        => reader.IsDBNull(ordinal)
+            ? null
+            : reader.GetFieldType(ordinal) == typeof(DateTime)
+                ? OpenIddictStoreJson.AsUtc(reader.GetDateTime(ordinal))
+                : ParseDateTime(reader.GetString(ordinal));
 
     /// <summary>Formats a UTC time as database text.</summary>
     public static string? FormatDateTime(DateTime? value)
@@ -96,10 +98,17 @@ public sealed class OpenIddictStoreSqliteDialect : IOpenIddictStoreDialect
             : OpenIddictStoreJson.NormalizeUtc(value)!.Value.ToString(DateTimeFormat, CultureInfo.InvariantCulture);
 
     /// <summary>Parses database text into a UTC time.</summary>
+    /// <remarks>
+    /// A trailing <c>Z</c> or offset is honoured as UTC rather than being read as local time and then
+    /// re-stamped, which would shift the instant by the machine's UTC offset. Values this dialect writes
+    /// carry no offset and parse unchanged.
+    /// </remarks>
     public static DateTime? ParseDateTime(string? value)
         => string.IsNullOrEmpty(value)
             ? null
             : DateTime.SpecifyKind(
-                DateTime.Parse(value!, CultureInfo.InvariantCulture, DateTimeStyles.None),
+                DateTime.Parse(
+                    value!, CultureInfo.InvariantCulture,
+                    DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal),
                 DateTimeKind.Utc);
 }

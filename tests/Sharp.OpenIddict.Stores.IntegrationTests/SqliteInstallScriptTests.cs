@@ -70,13 +70,20 @@ public sealed class SqliteInstallScriptTests : IAsyncLifetime
         await using var connection = await OpenAndInstallAsync();
 
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Series, Version FROM OpenIddictSchemaVersions";
+        command.CommandText = "SELECT Series, Version, UpdatedUtc FROM OpenIddictSchemaVersions";
 
         await using var reader = await command.ExecuteReaderAsync();
 
         Assert.True(await reader.ReadAsync());
         Assert.Equal("1", reader.GetString(0));
         Assert.Equal(1, reader.GetInt32(1));
+
+        // The seed date uses the dialect's own fixed text format, so the column never carries two
+        // representations of the same instant; reading it back must yield a UTC value.
+        var updated = OpenIddictStoreSqliteDialect.ParseDateTime(reader.GetString(2));
+
+        Assert.NotNull(updated);
+        Assert.Equal(DateTimeKind.Utc, updated!.Value.Kind);
         Assert.False(await reader.ReadAsync());
     }
 

@@ -204,6 +204,14 @@ public sealed class QueryTranslationContractTests : IAsyncLifetime
         // `>=` alone excludes the NULL row.
         Assert.Equal(0L, await _tokens.CountAsync<OpenIddictStoreToken>(
             query => query.Where(token => token.CreationDate >= cutoff), default));
+
+        // The column may sit on either side of the operator: `cutoff > CreationDate` means the same thing
+        // as `CreationDate < cutoff`, so normalizing the operands must also flip the operator.
+        Assert.Equal(1L, await _tokens.CountAsync<OpenIddictStoreToken>(
+            query => query.Where(token => cutoff > token.CreationDate), default));
+
+        Assert.Equal(0L, await _tokens.CountAsync<OpenIddictStoreToken>(
+            query => query.Where(token => cutoff < token.CreationDate), default));
     }
 
     [Fact]

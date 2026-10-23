@@ -105,7 +105,7 @@ public class OpenIddictStoreTokenStore<TToken> : OpenIddictStoreBase, IOpenIddic
 
         // Deleting a single Token needs no related collections (design 16.2.1): only that row is deleted, by Id and the previous token.
         var affected = await session.ExecuteAsync(
-            $"DELETE FROM {Table(Schema.Tokens)} WHERE {Column("Id")} = {Parameter("Id")} " +
+            $"DELETE FROM {Table(Schema.Tokens)} WHERE {Dialect.BuildExactStringEquals(Column("Id"), "Id")} " +
             $"AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "ConcurrencyToken")}",
             new { Id = entity.Id, ConcurrencyToken = entity.ConcurrencyToken }, cancellationToken)
             .ConfigureAwait(false);
@@ -582,7 +582,7 @@ public class OpenIddictStoreTokenStore<TToken> : OpenIddictStoreBase, IOpenIddic
                 {Column("Status")} = {Parameter("Status")},
                 {Column("Subject")} = {Parameter("Subject")},
                 {Column("Type")} = {Parameter("Type")}
-            WHERE {Column("Id")} = {Parameter("Id")}
+            WHERE {Dialect.BuildExactStringEquals(Column("Id"), "Id")}
               AND {Dialect.BuildExactStringEquals(Column("ConcurrencyToken"), "Previous")}",
             parameters, cancellationToken).ConfigureAwait(false);
 

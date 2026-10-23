@@ -1,4 +1,4 @@
--- Sharp.OpenIddict.Stores — PostgreSQL 7 / v0001 install script TEMPLATE
+-- Sharp.OpenIddict.Stores — PostgreSQL 1 / v0001 install script TEMPLATE
 -- This file is not executable as-is: the prefix and schema placeholders must be rendered first (see Sql/README.md).
 -- Target: PostgreSQL 14 or later; install into a new schema (public by default).
 -- Source version: none (install script); target: Series 1 / Version 1.
