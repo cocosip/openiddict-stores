@@ -19,17 +19,9 @@ public sealed class PackageAssetTests
     private static readonly string[] TargetFrameworks =
         ["netstandard2.0", "netstandard2.1", "net8.0", "net9.0", "net10.0"];
 
-    private static readonly string[] Products =
-    [
-        "Sharp.OpenIddict.Stores.Models",
-        "Sharp.OpenIddict.Stores",
-        "Sharp.OpenIddict.Stores.SqlServer",
-        "Sharp.OpenIddict.Stores.PostgreSql",
-        "Sharp.OpenIddict.Stores.MySql",
-        "Sharp.OpenIddict.Stores.Sqlite",
-        "Sharp.OpenIddict.Stores.Oracle",
-        "Sharp.OpenIddict.Stores.Dm",
-    ];
+    private static readonly Lazy<string[]> ProductList = new(BuildProductNames);
+
+    private static string[] Products => ProductList.Value;
 
     [Fact]
     public void AllEightPackagesAreProduced()
@@ -214,9 +206,9 @@ public sealed class PackageAssetTests
     {
         // The core package ships no SQL; the SQLite package ships its own scripts (design 10.1).
         Assert.DoesNotContain(
-            ListEntries("Sharp.OpenIddict.Stores"), name => name.StartsWith("sql/", StringComparison.Ordinal));
+            ListEntries(CoreProduct), name => name.StartsWith("sql/", StringComparison.Ordinal));
 
-        var sqlite = ListEntries("Sharp.OpenIddict.Stores.Sqlite");
+        var sqlite = ListEntries(ProductFor("Sqlite"));
 
         Assert.Contains("sql/1/install/v0001.sql.template", sqlite);
         Assert.Contains("sql/manifest.json", sqlite);
@@ -232,7 +224,7 @@ public sealed class PackageAssetTests
     [MemberData(nameof(ProviderNames))]
     public void PackagedSql_IsByteIdenticalToTheRepositorySource(string provider)
     {
-        var product = "Sharp.OpenIddict.Stores." + provider;
+        var product = ProductFor(provider);
         var sourceRoot = Path.Combine(RepositoryRoot, "src", product, "Sql");
 
         using var archive = ZipFile.OpenRead(PackagePath(product));
@@ -279,6 +271,41 @@ public sealed class PackageAssetTests
 
     public static IEnumerable<object[]> ProductNames()
         => Products.Select(product => new object[] { product });
+
+    private static string CoreProduct
+        => Products.Single(product => product.EndsWith(".OpenIddict.Stores", StringComparison.Ordinal));
+
+    private static string ProductFor(string provider)
+        => Products.Single(product => product.EndsWith("." + provider, StringComparison.Ordinal));
+
+    private static string[] BuildProductNames()
+    {
+        // The brand prefix is configured once in Directory.Build.props and each product project
+        // declares its own PackageId from it, so the artifact assertions follow the same source.
+        var baseName = ReadPackageIdPrefix() + ".OpenIddict.Stores";
+
+        return
+        [
+            baseName + ".Models",
+            baseName,
+            baseName + ".SqlServer",
+            baseName + ".PostgreSql",
+            baseName + ".MySql",
+            baseName + ".Sqlite",
+            baseName + ".Oracle",
+            baseName + ".Dm",
+        ];
+    }
+
+    private static string ReadPackageIdPrefix()
+    {
+        var path = Path.Combine(RepositoryRoot, "Directory.Build.props");
+        var prefix = XDocument.Load(path).Descendants("PackageIdPrefix").FirstOrDefault()?.Value;
+
+        return string.IsNullOrWhiteSpace(prefix)
+            ? throw new InvalidOperationException("Directory.Build.props must define PackageIdPrefix.")
+            : prefix;
+    }
 
     private static IEnumerable<string> ListEntries(string product)
     {

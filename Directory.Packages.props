@@ -5,11 +5,12 @@
     Version attribute (design 4.1). All dependencies are stable releases; no preview
     packages are referenced (design 2, design 3).
 
-    Versions are bounded ranges instead of exact pins. Central package management still
-    restores the lowest version in a range, so the build uses the reviewed lower bound,
-    while the packed nuspec carries the range and lets a consumer take compatible
-    servicing updates inside the same major line. Lower bounds are the lowest patches that
-    already carry the security fixes this repository ships.
+    Versions are bounded ranges instead of exact pins. Central package management restores
+    the lowest version in a range, while the packed nuspec carries the range and lets a
+    consumer take compatible servicing updates inside the same major line. Microsoft lower
+    bounds are the lowest versions OpenIddict 7.7.2 itself accepts (8.0.2 / 9.0.19 /
+    10.0.11); going lower fails restore with NU1109. The one exception is the build-only
+    Pkcs pin, which keeps the security-patched floor.
   -->
   <PropertyGroup>
     <OpenIddictVersionRange>[7.7.2,8.0.0)</OpenIddictVersionRange>
@@ -17,19 +18,26 @@
 
   <!--
     One version line per target framework (design 4.1.1): netstandard2.0/2.1 and net8.0
-    stay on the 8.0.x line, net9.0 on 9.0.x and net10.0 on 10.0.x. Every Microsoft
-    package below reuses the property, so a line is bumped in exactly one place.
+    stay on the 8.0.x line, net9.0 on 9.0.x and net10.0 on 10.0.x. Every
+    Microsoft.Extensions.* package reuses the property, so a line is bumped in one place.
+
+    System.Security.Cryptography.Pkcs is a build-time transitive pin, not a dependency of
+    the packed nuspec, so it keeps the patched floor (GHSA-2fmv-rv2c-59x7 /
+    GHSA-846f-f764-76mx) instead of any lower version.
   -->
   <PropertyGroup>
-    <MicrosoftVersionRange>[10.0.13,11.0.0)</MicrosoftVersionRange>
+    <MicrosoftVersionRange>[10.0.11,11.0.0)</MicrosoftVersionRange>
+    <PkcsVersionRange>[10.0.13,11.0.0)</PkcsVersionRange>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(TargetFramework)' == 'net9.0'">
-    <MicrosoftVersionRange>[9.0.21,10.0.0)</MicrosoftVersionRange>
+    <MicrosoftVersionRange>[9.0.19,10.0.0)</MicrosoftVersionRange>
+    <PkcsVersionRange>[9.0.21,10.0.0)</PkcsVersionRange>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0' Or '$(TargetFramework)' == 'netstandard2.1' Or '$(TargetFramework)' == 'net8.0'">
     <MicrosoftVersionRange>[8.0.2,9.0.0)</MicrosoftVersionRange>
+    <PkcsVersionRange>[8.0.2,9.0.0)</PkcsVersionRange>
   </PropertyGroup>
 
   <!--
@@ -45,15 +53,13 @@
   </ItemGroup>
 
   <!--
-    Microsoft.Extensions.* and the transitive System.Security.Cryptography.Pkcs pin share
-    the per-TFM line above. Pkcs 8.0.2 carries the GHSA-2fmv-rv2c-59x7 /
-    GHSA-846f-f764-76mx fixes, so it is also the 8.x lower bound.
+    Microsoft.Extensions.* shares the per-TFM line above; Pkcs uses the security floor.
   -->
   <ItemGroup>
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="$(MicrosoftVersionRange)" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftVersionRange)" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="$(MicrosoftVersionRange)" />
-    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="$(MicrosoftVersionRange)" />
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="$(PkcsVersionRange)" />
   </ItemGroup>
 
   <!--

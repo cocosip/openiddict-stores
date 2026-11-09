@@ -8,7 +8,7 @@
 
 为 OpenIddict 提供直接使用 SQL 的关系数据库存储扩展，沿用 OpenIddict 原生 Manager、Store、Descriptor 和依赖注入扩展点；通过原生选项禁用实体缓存，保证批量变更后的重新查询读取数据库。
 
-- 所有发布包以 `Sharp` 开头，统一采用 `Sharp.OpenIddict.Stores.*`。
+- 所有发布包以 `Sharp` 开头，统一采用 `Sharp.OpenIddict.Stores.*`。包名前缀集中配置在 `Directory.Build.props` 的 `PackageIdPrefix`，每个产品工程用它**显式**声明自己的 `PackageId`，改包名前缀只需改这一处；程序集名与命名空间仍为 `Sharp.*`，不随该属性变化。
 - 首版数据库覆盖 SQL Server、PostgreSQL、MySQL/MariaDB、SQLite、Oracle、达梦。
 - 提供 .NET Standard 2.0、2.1、.NET 8、9、10 的兼容系列（基于 OpenIddict 7.7.2 稳定版）；OpenIddict 8.x 系列等上游发布稳定版后另行启动。
 - 所有测试、示例和可运行辅助程序使用 .NET 10，解决方案使用 `.slnx`。
@@ -145,20 +145,23 @@ docs/
 | TFM | DependencyInjection.Abstractions | Logging.Abstractions | Options |
 | --- | --- | --- | --- |
 | netstandard2.0 / netstandard2.1 / net8.0 | `[8.0.2,9.0.0)` | `[8.0.2,9.0.0)` | `[8.0.2,9.0.0)` |
-| net9.0 | `[9.0.21,10.0.0)` | `[9.0.21,10.0.0)` | `[9.0.21,10.0.0)` |
-| net10.0 | `[10.0.13,11.0.0)` | `[10.0.13,11.0.0)` | `[10.0.13,11.0.0)` |
+| net9.0 | `[9.0.19,10.0.0)` | `[9.0.19,10.0.0)` | `[9.0.19,10.0.0)` |
+| net10.0 | `[10.0.11,11.0.0)` | `[10.0.11,11.0.0)` | `[10.0.11,11.0.0)` |
 
-`System.Security.Cryptography.Pkcs` 作为传递依赖提升按同一分线使用同一范围（`[8.0.2,9.0.0)` / `[9.0.21,10.0.0)` / `[10.0.13,11.0.0)`），用于消除上游传递引入的已知漏洞版本。
+这些下界不能再低：OpenIddict 7.7.2 自身的依赖组要求 net8 至少 8.0.2、net9 至少 9.0.19、net10 至少 10.0.11，把下界改到 x.0.0 在启用传递依赖提升时会触发 NU1109 降级错误，关闭提升后也会触发 NU1605。对消费者而言这些也是实际解析下限，发布更低的区间不会让任何消费方真正解析到更低版本。
+
+`System.Security.Cryptography.Pkcs` 是**仅构建期**的传递依赖提升，不出现在发布包的 nuspec 依赖组中；它保留已修复 GHSA-2fmv-rv2c-59x7/GHSA-846f-f764-76mx 的版本下界（`[8.0.2,9.0.0)` / `[9.0.21,10.0.0)` / `[10.0.13,11.0.0)`），与 Microsoft.Extensions.* 的范围分开。
 
 规则：
 
 - 每个 TFM 选取该 TFM 上仍受支持的**最低版本线**，且不低于上游同 TFM 依赖组的下限；消费者可以自行解析到更高补丁，本扩展不替消费者锁定高主版本。
 - 发布依赖使用**范围版本**而不是精确版本：`Directory.Packages.props` 的 `PackageVersion` 写 `[下界,下一主版本)`，打包后 nuspec 依赖组保留该范围，消费者可在同一主版本内获取服务更新；中央包管理仍按下界还原，构建结果可复现。
-- 微软系列包的分线版本集中在一个 MSBuild 属性（`MicrosoftVersionRange`）中，按 TFM 覆盖一次，所有 `Microsoft.Extensions.*` 与 `System.Security.Cryptography.Pkcs` 共用该属性，避免逐包登记版本。
+- 下界取 OpenIddict 7.7.2 依赖组实际要求的版本，不向 x.0.0 下探；低于该下限在启用传递依赖提升时会触发 NU1109。
+- 微软系列包的分线版本集中在一个 MSBuild 属性（`MicrosoftVersionRange`）中，按 TFM 覆盖一次，所有 `Microsoft.Extensions.*` 共用该属性；Pkcs 的安全下界用单独的 `PkcsVersionRange`，因为它只参与构建期提升。
 - 8.x 主线只有 `net10.0`，其依赖统一使用 10.0.x；该行在 8.x 稳定版发布并实施后生效，当前不适用。
 - 按 TFM 覆盖只允许在 `Directory.Packages.props` 中用 `Condition="'$(TargetFramework)' == 'net8.0'"` 的 `PropertyGroup` 完成，不允许改用工程级 `Version`、`VersionOverride` 或运行时程序集绑定绕过。
 - 单一版本即可覆盖全部 TFM 的依赖不必拆分；只有存在按代际发布的依赖（Microsoft.Extensions.*、缓存、日志、选项等）才按 TFM 分线。
-- 打包后检查 nuspec 依赖组：`netstandard2.0`/`netstandard2.1`/`net8.0` 组不得出现 9.x/10.x 的 Microsoft.Extensions.*，`net9.0` 组不得出现 10.x；主线 `net10.0` 组不得出现低代际依赖。7.7.2 基线已实测通过：`Sharp.OpenIddict.Stores` 的 nuspec 五个依赖组分别为 `[8.0.2,9.0.0)` / `[8.0.2,9.0.0)` / `[8.0.2,9.0.0)` / `[9.0.21,10.0.0)` / `[10.0.13,11.0.0)`，OpenIddict 依赖统一为 `[7.7.2,8.0.0)`。
+- 打包后检查 nuspec 依赖组：`netstandard2.0`/`netstandard2.1`/`net8.0` 组不得出现 9.x/10.x 的 Microsoft.Extensions.*，`net9.0` 组不得出现 10.x；主线 `net10.0` 组不得出现低代际依赖。7.7.2 基线已实测通过：`Sharp.OpenIddict.Stores` 的 nuspec 五个依赖组分别为 `[8.0.2,9.0.0)` / `[8.0.2,9.0.0)` / `[8.0.2,9.0.0)` / `[9.0.19,10.0.0)` / `[10.0.11,11.0.0)`，OpenIddict 依赖统一为 `[7.7.2,8.0.0)`。
 - 只在全局组登记 `Microsoft.Extensions.DependencyInjection` 这类会向下拉取更高代际的包，会把 10.0.x 注入低 TFM 并触发 NU1109 降级错误；因此这类提升必须收进对应 TFM 的条件线，或直接不提升，让上游解析结果保留。
 - 数据库驱动只被测试、示例引用时同样受宿主 TFM 限制：驱动缺少某 TFM 资产（例如 Oracle 驱动只有 `net8.0`/`netstandard2.1`）时，在该 TFM 上不可用，必须在支持矩阵和使用说明中标注，不得用版本提升假装支持。
 - 测试、示例和可运行工具固定 `net10.0`，统一引用 10.0.x；它们引用多目标类库时由 NuGet 选择 `net10.0` 资产，这条不构成“已在 net8/net9 原生运行”的证据。

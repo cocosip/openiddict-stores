@@ -996,6 +996,22 @@ dotnet pack Sharp.OpenIddict.Stores.slnx --configuration Release --no-build --ou
 - 缺口：工作流仍未在真实 runner 首跑；需要在 nuget.org 为 `cocosip/openiddict-stores` / `ci-cd.yml` 建立 Trusted Publishing 策略（Environment 留空），发布用户为 `virtual`（nuget.org profile 名，非邮箱）。
 
 
+### E-051：显式包名与可配置前缀、Microsoft 依赖下界降到上游最低要求
+
+- 任务：无任务清单编号（用户要求"显式指定包名"、"Sharp 前缀统一配置"、"范围版本的起包版本再低一点"）；系列：1.x。
+- 日期：2026-11-09；实现：本次提交。
+- 产物：
+  - `Directory.Build.props`：新增 `PackageIdPrefix=Sharp`，包名前缀只配置一次。
+  - `src/` 八个产品工程：每个显式声明 `<PackageId>$(PackageIdPrefix).OpenIddict.Stores[.<Provider>]</PackageId>`；程序集名与命名空间不变，因此改包名前缀不会连带动到源码命名。
+  - `Directory.Packages.props`：`MicrosoftVersionRange` 下界降到 OpenIddict 7.7.2 依赖组实际要求的最低版本（net8 8.0.2、net9 9.0.19、net10 10.0.11）；`System.Security.Cryptography.Pkcs` 是仅构建期的传递提升、不出现在 nuspec，改用独立的 `PkcsVersionRange` 保留安全修复下界。
+  - `PackageAssetTests`：产品列表从 `PackageIdPrefix` 派生，不再硬编码 `Sharp.OpenIddict.Stores.*`。
+- 验证命令与结果：
+  - 先尝试把下界设为 x.0.0（`[9.0.0,10.0.0)`、`[10.0.0,11.0.0)`）：`dotnet restore Sharp.OpenIddict.Stores.slnx` 失败，NU1109 降级错误指出 OpenIddict 7.7.2 要求 net8 ≥8.0.2、net9 ≥9.0.19、net10 ≥10.0.11；关闭传递依赖提升后再试，仍以 NU1605 失败（直接引用的范围下界低于 OpenIddict 的传递下限）。因此下界取这些最低可解析版本。
+  - 打包后 nuspec 依赖组：netstandard2.0/2.1/net8.0 为 `[8.0.2, 9.0.0)`，net9.0 为 `[9.0.19, 10.0.0)`，net10.0 为 `[10.0.11, 11.0.0)`；八个包 id 仍为独立的 `Sharp.OpenIddict.Stores*`。
+  - `scripts/verify.ps1`：8 个包；126 单元 + 332 集成，0 跳过，退出码 0。
+- 结果与缺口：x.0.0 不是消费者实际可解析的下限——OpenIddict.Core 7.7.2 自身就要求更高的补丁，发布更低区间只会掩盖实际约束；要再降低下界，前提是升级 OpenIddict。
+
+
 后续任务完成时复制以下模板并填写，再勾选任务；同一任务有多个系列或环境时分别列明，不覆盖过去的失败/修复记录。
 ```text
 ### E-012：Application Store 与集合索引

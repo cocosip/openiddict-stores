@@ -22,6 +22,12 @@
     <Product>Sharp.OpenIddict.Stores</Product>
     <Company>Sharp.OpenIddict.Stores</Company>
     <Authors>Sharp.OpenIddict.Stores contributors</Authors>
+    <!--
+      Package-id brand prefix, configured once: change this value and every package id follows. Each
+      product project declares its own PackageId explicitly from this property. Assembly names and
+      namespaces keep the existing Sharp.* identity, so a full brand rename is still a source-wide change.
+    -->
+    <PackageIdPrefix>Sharp</PackageIdPrefix>
     <RepositoryType>git</RepositoryType>
     <VersionPrefix>1.0.0</VersionPrefix>
     <NeutralLanguage>en</NeutralLanguage>
