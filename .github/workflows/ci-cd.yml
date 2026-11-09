@@ -1,11 +1,14 @@
 name: CI/CD Pipeline
 
 # Branch pushes and pull requests only build and test (the same gate scripts/verify.ps1 runs locally:
-# restore, Release build for all five target frameworks, unit + integration tests, package checks).
-# Publishing happens only on a version tag: v*.*.* packs the eight packages and pushes them to NuGet,
-# then creates a GitHub release carrying the artifacts.
+# restore, Release build for all five target frameworks, packing, unit + integration tests, package checks).
+# Packing always happens because the package asset tests inspect the produced nupkgs.
 #
-# Required secret: NUGET_API_KEY (nuget.org API key).
+# Publishing happens only on a version tag. The tag must equal the version composed from <VersionPrefix>
+# (plus <VersionSuffix> for a pre-release) in Directory.Build.props and must point to HEAD, so the published
+# package version can never drift from the tagged source. The build job packs once and uploads the verified
+# packages; the publish job only downloads that artifact and pushes it with a short-lived nuget.org API key
+# issued by NuGet Trusted Publishing (GitHub OIDC). No long-lived NUGET_API_KEY secret is used.
 
 on:
   push:
@@ -20,7 +23,11 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
+  CI: true
   DOTNET_VERSION: '10.0.x'
   CONFIGURATION: Release
 
@@ -28,15 +35,62 @@ jobs:
   build-and-test:
     name: Build and Test
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          # The default global-packages folder, because the low-TFM asset tests resolve their
+          # dependency closure from it.
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/Directory.Build.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Resolve version and validate the tag
+        id: version
+        shell: bash
+        run: |
+          VERSION_PREFIX=$(sed -n 's:.*<VersionPrefix>\(.*\)</VersionPrefix>.*:\1:p' Directory.Build.props | head -n 1)
+          if [ -z "$VERSION_PREFIX" ]; then
+            echo "Directory.Build.props does not define <VersionPrefix>."
+            exit 1
+          fi
+          VERSION_SUFFIX=$(sed -n 's:.*<VersionSuffix>\(.*\)</VersionSuffix>.*:\1:p' Directory.Build.props | head -n 1)
+          if [ -n "$VERSION_SUFFIX" ]; then
+            VERSION="${VERSION_PREFIX}-${VERSION_SUFFIX}"
+          else
+            VERSION="$VERSION_PREFIX"
+          fi
+          RELEASE=false
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            if [ "$TAG_VERSION" != "$VERSION" ]; then
+              echo "Tag '$GITHUB_REF_NAME' must match the project version '$VERSION'."
+              exit 1
+            fi
+            if [ "$(git rev-parse "refs/tags/${GITHUB_REF_NAME}^{commit}")" != "$(git rev-parse HEAD)" ]; then
+              echo "Tag '$GITHUB_REF_NAME' must point to HEAD."
+              exit 1
+            fi
+            RELEASE=true
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "release=${RELEASE}" >> "$GITHUB_OUTPUT"
+          echo "Version: ${VERSION} (release: ${RELEASE})"
 
       # One definition of "green" for local work and CI: the script runs restore, build, pack (packages
       # before tests - the package asset tests read them), and tests, and fails on any non-zero step.
@@ -46,47 +100,75 @@ jobs:
         shell: pwsh
         run: ./scripts/verify.ps1
 
+      - name: Generate release notes
+        if: steps.version.outputs.release == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          URL="https://github.com/${GITHUB_REPOSITORY}"
+          PREVIOUS=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD^ 2>/dev/null || true)
+          if [ -n "$PREVIOUS" ]; then
+            COMPARISON="Changes since [${PREVIOUS}](${URL}/releases/tag/${PREVIOUS}). [Full changelog](${URL}/compare/${PREVIOUS}...${GITHUB_REF_NAME})."
+          else
+            COMPARISON="First release. [Commit history](${URL}/commits/${GITHUB_REF_NAME})."
+          fi
+          COMMIT_COUNT=$(git log --no-merges --oneline "${PREVIOUS:+${PREVIOUS}..}HEAD" | wc -l | tr -d ' ')
+          {
+            echo "# Sharp.OpenIddict.Stores ${VERSION}"
+            echo
+            echo "## Packages"
+            echo
+            echo '```shell'
+            echo "dotnet add package Sharp.OpenIddict.Stores --version ${VERSION}"
+            echo '```'
+            echo
+            echo "The eight packages (core, models and six database providers) are published to the [NuGet Gallery](https://www.nuget.org/packages/Sharp.OpenIddict.Stores)."
+            echo
+            echo "## Changes"
+            echo
+            echo "$COMPARISON"
+            echo
+            echo "${COMMIT_COUNT} commits (excluding merges)."
+            echo
+            git log --no-merges --format='- %h %s (%an)' "${PREVIOUS:+${PREVIOUS}..}HEAD"
+            echo
+            echo "See the [repository](${URL})."
+          } > artifacts/RELEASE_NOTES.md
+
+      - name: Upload verified packages and release notes
+        if: steps.version.outputs.release == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: nuget-packages
+          path: |
+            artifacts/*.nupkg
+            artifacts/RELEASE_NOTES.md
+          if-no-files-found: error
+          retention-days: 30
+
+  # Publishing only consumes the build job's artifact: no checkout, no restore, no build, so the pushed
+  # bytes are exactly the ones the verification gates accepted.
   publish:
-    name: Pack and Publish (tag)
+    name: Publish NuGet
     runs-on: ubuntu-latest
     needs: build-and-test
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: needs.build-and-test.outputs.release == 'true'
     permissions:
       contents: write
+      id-token: write # required by NuGet Trusted Publishing (GitHub OIDC token)
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Extract version from the tag
-        id: version
-        shell: bash
-        run: |
-          VERSION="${GITHUB_REF#refs/tags/v}"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Version: ${VERSION}"
-
-      - name: Restore dependencies
-        run: dotnet restore Sharp.OpenIddict.Stores.slnx --verbosity minimal
-
-      - name: Build solution
-        run: dotnet build Sharp.OpenIddict.Stores.slnx --configuration ${{ env.CONFIGURATION }} --no-restore --verbosity minimal
-
-      - name: Pack NuGet packages
-        run: |
-          mkdir -p ./packages
-          dotnet pack Sharp.OpenIddict.Stores.slnx \
-            --configuration ${{ env.CONFIGURATION }} \
-            --no-build \
-            --output ./packages \
-            /p:ContinuousIntegrationBuild=true \
-            /p:Version=${{ steps.version.outputs.version }} \
-            --verbosity minimal
+      - name: Download verified packages and release notes
+        uses: actions/download-artifact@v8
+        with:
+          name: nuget-packages
+          path: ./packages
 
       - name: Verify the eight packages
         shell: pwsh
@@ -97,46 +179,40 @@ jobs:
           }
           $packages | ForEach-Object { Write-Host "  $($_.Name)" }
 
-      - name: Publish to NuGet.org
-        run: >
-          dotnet nuget push ./packages/*.nupkg
-          --api-key ${{ secrets.NUGET_API_KEY }}
-          --source https://api.nuget.org/v3/index.json
-          --skip-duplicate
+      # Trusted publishing: exchange this workflow's GitHub OIDC token for a one-hour nuget.org API key.
+      # Requires a nuget.org trusted publishing policy for cocosip/openiddict-stores / ci-cd.yml
+      # (environment left blank). `virtual` is the nuget.org profile name, not an email.
+      - name: NuGet login (OIDC -> temporary API key)
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: virtual
 
-      - name: Generate changelog
-        id: changelog
+      - name: Publish packages to NuGet.org
         shell: bash
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
         run: |
-          PREVIOUS_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
-
-          if [ -z "$PREVIOUS_TAG" ]; then
-            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --reverse)
-          else
-            CHANGELOG=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)" --reverse)
-          fi
-
-          {
-            echo 'CHANGELOG<<EOF'
-            echo "$CHANGELOG"
-            echo EOF
-          } >> "$GITHUB_OUTPUT"
+          for package in ./packages/*.nupkg; do
+            test -s "$package"
+            dotnet nuget push "$package" \
+              --api-key "$NUGET_API_KEY" \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          done
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          name: Release v${{ steps.version.outputs.version }}
-          tag_name: v${{ steps.version.outputs.version }}
-          body: |
-            ## Release v${{ steps.version.outputs.version }}
-
-            ### Packages
-            The eight Sharp.OpenIddict.Stores packages (core, models, and six database providers),
-            also published to the [NuGet Gallery](https://www.nuget.org/packages/Sharp.OpenIddict.Stores).
-
-            ### Changes
-            ${{ steps.changelog.outputs.CHANGELOG }}
-          files: ./packages/*.nupkg
-          draft: false
-          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.build-and-test.outputs.version }}
+        run: |
+          flags=()
+          if [[ "$VERSION" == *-* ]]; then
+            flags+=(--prerelease --latest=false)
+          fi
+          gh release create "$GITHUB_REF_NAME" --verify-tag \
+            --title "Sharp.OpenIddict.Stores $VERSION" \
+            --notes-file ./packages/RELEASE_NOTES.md \
+            "${flags[@]}" ./packages/*.nupkg ./packages/RELEASE_NOTES.md

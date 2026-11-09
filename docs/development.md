@@ -20,7 +20,7 @@
 | P5 数据库验收 | DB-01～DB-07 | DB-01 完成并有本地真库证据（E-035）；DB-02 完成；DB-03、DB-06 与 DB-07（原生、Oracle 兼容两模式）于 2026-10-20 在用户提供的服务器上通过完整验收（E-044）；DB-04/DB-05 与 DB-07 的 MySQL 兼容模式方言与模板已交付但真库未验证（E-028） | 七种服务器及声明的 DM 三种模式分别通过完整验收 |
 | P6 多目标与包资产 | COMPAT-01～COMPAT-04 | 全部完成 | 五 TFM 构建、包资产与驱动兼容性记录通过 |
 | P7 脚本维护、升级、协议与示例 | MIG-01～MIG-04、APP-01～APP-04 | MIG-01 完成、MIG-04 结构部分完成（E-030/E-034）；MIG-02 按设计不适用；MIG-03、APP-01～04 未开始 | SQL 资产维护、协议回归和两个 net10 示例完成 |
-| P8 CI 与交付候选 | CI-01～CI-03、REL-01～REL-02 | CI-01：本地门禁（E-036）与 CI/CD 工作流（E-042）已交付，工作流待真实 runner 首跑确认；CI-02、CI-03、REL-01 未开始 | 门禁通过，具备可审阅的包和证据 |
+| P8 CI 与交付候选 | CI-01～CI-03、REL-01～REL-02 | CI-01：本地门禁（E-036）与 CI/CD 工作流（E-042，2026-11-09 改为 NuGet Trusted Publishing，见 E-050）已交付，工作流待真实 runner 首跑确认；CI-02、CI-03、REL-01 未开始 | 门禁通过，具备可审阅的包和证据 |
 
 这是按交付依赖组织的阶段，不是固定工期。迁移用例、Manager 测试和使用说明应随功能持续补充，P7/P8 负责最终联验，不能将测试统一推迟到最后。
 
@@ -197,7 +197,7 @@ JSON 是集合权威数据；四张辅助表同事务维护，摘要仅筛选候
 
 前置：目标系列功能、文档和验证可用；CI 可随前面阶段逐步落地，正式候选依赖其全部必需结果。对应设计第 18、19 节。
 
-- [ ] **CI-01 构建、单元、SQLite 与包资产阶段。** 本地门禁已交付（E-036）：`scripts/verify.ps1` 串起还原/五 TFM Release 构建/打包/测试/包内容检查（打包先于测试的顺序修复见 E-039），实测失败退出码为 1。CI/CD 工作流已交付（E-042）：分支只构建测试，tag 才打包发布 NuGet 并建 GitHub Release；工作流尚未在真实 runner 上首跑。剩余：真实 runner 首跑确认、仓库配置 `NUGET_API_KEY`、MIG-03 的 SQL 历史与发布历史检查。
+- [ ] **CI-01 构建、单元、SQLite 与包资产阶段。** 本地门禁已交付（E-036）：`scripts/verify.ps1` 串起还原/五 TFM Release 构建/打包/测试/包内容检查（打包先于测试的顺序修复见 E-039），实测失败退出码为 1。CI/CD 工作流已交付（E-042），并于 2026-11-09 改为单次构建 + artifact 交接 + NuGet Trusted Publishing（E-050）：分支只构建测试，tag 才发布 NuGet 并建 GitHub Release；工作流尚未在真实 runner 上首跑。剩余：真实 runner 首跑确认、nuget.org 配置 Trusted Publishing 策略（无需 `NUGET_API_KEY` secret）、MIG-03 的 SQL 历史与发布历史检查。
   验收：还原/Release 构建各 TFM，执行单元及 SQLite 合同、公开 API/依赖/消费者检查；执行 MIG-03 的 SQL 清单/摘要、发布历史与包提取一致性检查，验证包可先作为门禁输入打包但不标为发布候选；脚本可重复执行，所有可运行辅助项目保持 net10，失败不能吞掉退出码。
 - [ ] **CI-02 真库与协议、升级阶段。** 产物：服务器任务配置与测试结果。
   验收：七种服务器及 DM 声明模式、Manager/Server、MIG-01～04 的安装/升级链/结构一致性/数据保留和并发结果齐备；Oracle/DM 自托管环境使用专用 schema 与 secrets，缺环境时明确阻塞发布门禁，跳过不能当成功。
@@ -976,6 +976,24 @@ dotnet pack Sharp.OpenIddict.Stores.slnx --configuration Release --no-build --ou
   - net10 宿主 + 已配置 SQL Server：15 项报 `must run on a net8.0 host: this provider's driver ships no net10 asset`，无一误跑。
   - `dotnet build Sharp.OpenIddict.Stores.slnx -c Release --no-incremental`：0 警告 0 错误；`dotnet test`：`126 单元 + 332 集成，0 跳过`。
 - 结果与缺口：真库入口从两个降为一个，六种数据库（含 DM 三模式）在同一项目、同一合同、同一配置下运行。基线跳过数从 16 变 0——不是"跳过的用例消失了"，而是它们搬到了不进 slnx 的验收项目，在那里按配置如实跳过。真库结论本身不变：SQL Server/MySQL/MariaDB/DM MySQL 兼容模式仍须在有服务器时执行本套件后才能改口径。
+
+
+### E-050：CI/CD 改用 NuGet Trusted Publishing、单次构建与范围版本
+
+- 任务：CI-01（远端部分）、依赖版本管理（设计 4.1/4.1.1）；系列：1.x。
+- 日期：2026-11-09；实现：本次提交。
+- 依据：用户要求参考 `cocosip/Locus` 调整 CI/CD；用微软最新方式（NuGet Trusted Publishing）发布 NuGet 包并调整 API key 用法；.NET 8/9/10 各 TFM 的依赖改用范围版本；微软系列包共用一个通用版本属性。
+- 产物：
+  - `Directory.Packages.props`：发布依赖从精确版本改为有界范围；新增 `OpenIddictVersionRange` 和按 TFM 覆盖的 `MicrosoftVersionRange`，所有 `Microsoft.Extensions.*` 与 `System.Security.Cryptography.Pkcs` 共用后者；测试/示例/工具版本保持固定（不进入包）。
+  - `Directory.Build.props`：`CI=true` 时启用 `ContinuousIntegrationBuild`，因为构建作业现在同时打包并上传 artifact。
+  - `.github/workflows/ci-cd.yml`：版本唯一来源为 `<VersionPrefix>`（预发布另加 `<VersionSuffix>`），tag 必须等于 `v<VersionPrefix>[-<VersionSuffix>]` 且指向 HEAD；构建作业只还原/构建/打包/测试一次，包资产测试检查同批 nupkg，随后上传 `nuget-packages` artifact；发布作业不 checkout、不还原、不编译，只下载 artifact，通过 `NuGet/login@v1`（GitHub OIDC）换取 1 小时临时 API Key 推送，`gh release create --verify-tag` 创建 Release；不再使用长期 `NUGET_API_KEY` secret。
+  - `PackageAssetTests`：包版本改为从 `Directory.Build.props` 读取；新增“外部依赖必须是有界范围、兄弟包保持同版本”的断言。
+  - `.github/workflows/README.md`：触发规则、Trusted Publishing 配置步骤和发布流程。
+- 验证命令与结果：
+  - `dotnet restore Sharp.OpenIddict.Stores.slnx` 与五 TFM Release 构建（普通和 `CI=true` 各一次）：0 警告 0 错误。
+  - 打包后 nuspec 依赖组：netstandard2.0/2.1/net8.0 为 `[8.0.2, 9.0.0)`，net9.0 为 `[9.0.21, 10.0.0)`，net10.0 为 `[10.0.13, 11.0.0)`，OpenIddict 为 `[7.7.2, 8.0.0)`；兄弟包为同版 `1.0.0`。
+  - `scripts/verify.ps1`（`CI=true` 复跑）：8 个包；126 单元 + 332 集成，0 跳过，退出码 0。
+- 缺口：工作流仍未在真实 runner 首跑；需要在 nuget.org 为 `cocosip/openiddict-stores` / `ci-cd.yml` 建立 Trusted Publishing 策略（Environment 留空），发布用户为 `virtual`（nuget.org profile 名，非邮箱）。
 
 
 后续任务完成时复制以下模板并填写，再勾选任务；同一任务有多个系列或环境时分别列明，不覆盖过去的失败/修复记录。

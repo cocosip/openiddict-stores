@@ -168,29 +168,25 @@ public sealed class PackageAssetTests
 
     [Theory]
     [MemberData(nameof(ProductNames))]
-    public void PackageHasNoProjectLevelVersionOverride(string product)
+    public void ExternalDependenciesAreBoundedVersionRanges(string product)
     {
-        // Central package management is the single version source (design 4.1). A nuspec dependency that
-        // disagrees with Directory.Packages.props would mean a project sneaked in its own Version.
+        // Central package management is the single version source (design 4.1) and versions are bounded
+        // ranges (design 4.1.1), so a consumer can take compatible servicing updates without crossing the
+        // supported major line. Sibling packages move in lockstep and keep the exact package version.
         var nuspec = ReadNuspec(product);
-        var versions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var central = ReadCentralVersions();
 
         foreach (var dependency in nuspec.Descendants().Where(element => element.Name.LocalName == "dependency"))
         {
-            var id = dependency.Attribute("id")?.Value;
-            var version = dependency.Attribute("version")?.Value;
+            var id = dependency.Attribute("id")?.Value ?? string.Empty;
+            var version = dependency.Attribute("version")?.Value ?? string.Empty;
 
-            if (id is null || version is null || !central.TryGetValue(id, out var candidates))
+            if (id.StartsWith("Sharp.OpenIddict.Stores", StringComparison.Ordinal))
             {
+                Assert.Equal(PackageVersion, version);
                 continue;
             }
 
-            // The declared version must be one the centre actually pins; any other number means a project
-            // bypassed central package management with its own Version attribute.
-            Assert.True(candidates.Any(candidate => version.StartsWith(candidate, StringComparison.Ordinal)),
-                $"{product} depends on '{id} {version}', which is not one of the centrally pinned versions " +
-                $"({string.Join(", ", candidates)}).");
+            Assert.Matches(@"^\[[0-9]+\.[0-9]+\.[0-9]+,\s*[0-9]+\.[0-9]+\.[0-9]+\)$", version);
         }
     }
 
@@ -210,7 +206,7 @@ public sealed class PackageAssetTests
             .ToArray();
 
         Assert.Single(versions);
-        Assert.Equal("1.0.0", versions[0]);
+        Assert.Equal(PackageVersion, versions[0]);
     }
 
     [Fact]
@@ -302,38 +298,6 @@ public sealed class PackageAssetTests
         return XDocument.Load(stream);
     }
 
-    private static Dictionary<string, List<string>> ReadCentralVersions()
-    {
-        var path = Path.Combine(RepositoryRoot, "Directory.Packages.props");
-        var document = XDocument.Load(path);
-
-        // A package id can legitimately appear once per TFM line in central package management (design
-        // 4.1.1), so every declared version is collected rather than only the last one.
-        var versions = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var element in document.Descendants()
-                     .Where(item => item.Name.LocalName == "PackageVersion")
-                     .Where(item => item.Attribute("Include") is not null))
-        {
-            var id = element.Attribute("Include")!.Value;
-            var version = element.Attribute("Version")?.Value;
-
-            if (version is null)
-            {
-                continue;
-            }
-
-            if (!versions.TryGetValue(id, out var list))
-            {
-                versions[id] = list = [];
-            }
-
-            list.Add(version);
-        }
-
-        return versions;
-    }
-
     private static string NormalizeFramework(string targetFramework)
     {
         // nuspec writes identifiers like ".NETStandard2.0" or ".NETCoreApp8.0"; map them back to the TFM.
@@ -366,12 +330,32 @@ public sealed class PackageAssetTests
     }
 
     private static string PackagePath(string product)
-        => Path.Combine(ArtifactsDirectory, product + ".1.0.0.nupkg");
+        => Path.Combine(ArtifactsDirectory, product + "." + PackageVersion + ".nupkg");
 
     // Declared before its consumers: static field initializers run in textual order.
     private static string RepositoryRoot { get; } = LocateRepositoryRoot();
 
     private static string ArtifactsDirectory { get; } = Path.Combine(RepositoryRoot, "artifacts");
+
+    private static string PackageVersion { get; } = ReadPackageVersion();
+
+    private static string ReadPackageVersion()
+    {
+        var path = Path.Combine(RepositoryRoot, "Directory.Build.props");
+        var document = XDocument.Load(path);
+        var prefix = document.Descendants("VersionPrefix").FirstOrDefault()?.Value;
+
+        if (string.IsNullOrWhiteSpace(prefix))
+        {
+            throw new InvalidOperationException("Directory.Build.props must define VersionPrefix.");
+        }
+
+        // NuGet composes Version as VersionPrefix[-VersionSuffix]; the release workflow validates the
+        // tag against the same composition, so a pre-release is tagged like v1.1.0-rc.1.
+        var suffix = document.Descendants("VersionSuffix").FirstOrDefault()?.Value;
+
+        return string.IsNullOrWhiteSpace(suffix) ? prefix : prefix + "-" + suffix;
+    }
 
     private static string LocateRepositoryRoot()
     {

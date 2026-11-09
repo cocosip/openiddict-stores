@@ -68,7 +68,7 @@ public sealed class DependencyConventionTests
     }
 
     [Fact]
-    public void CentralPackageManagement_IsEnabledWithPinnedVersions()
+    public void CentralPackageManagement_IsEnabledWithCentralVersionEntries()
     {
         var props = XDocument.Load(Path.Combine(RepositoryRoot, "Directory.Packages.props"));
         var versions = props.Descendants("PackageVersion").ToList();
@@ -86,8 +86,25 @@ public sealed class DependencyConventionTests
     {
         var props = XDocument.Load(Path.Combine(RepositoryRoot, "Directory.Packages.props"));
 
-        var prereleases = props.Descendants("PackageVersion")
-            .Select(v => new { Id = v.Attribute("Include")?.Value, Version = v.Attribute("Version")?.Value })
+        // PackageVersion values may reference a shared MSBuild property (the per-TFM Microsoft line),
+        // so the property values are checked too: a prerelease hidden in a property is still a violation.
+        var declarations = props.Descendants()
+            .Where(element => element.Name.LocalName == "PackageVersion")
+            .Select(element => new
+            {
+                Id = element.Attribute("Include")?.Value,
+                Version = element.Attribute("Version")?.Value,
+            })
+            .Concat(props.Descendants("PropertyGroup")
+                .SelectMany(group => group.Elements())
+                .Where(element => element.Name.LocalName.EndsWith("VersionRange", StringComparison.Ordinal))
+                .Select(element => new
+                {
+                    Id = (string?)element.Name.LocalName,
+                    Version = (string?)element.Value,
+                }));
+
+        var prereleases = declarations
             .Where(v => v.Version is not null && v.Version.Contains('-'))
             .Select(v => $"{v.Id} {v.Version}")
             .ToList();

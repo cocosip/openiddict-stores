@@ -2,7 +2,7 @@
 
 [![CI/CD](https://github.com/cocosip/openiddict-stores/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/cocosip/openiddict-stores/actions/workflows/ci-cd.yml)
 
-Relational database stores for OpenIddict, for SQL Server, PostgreSQL, MySQL/MariaDB, SQLite, Oracle and DM (Dameng). The packages are versioned independently of upstream (starting at 1.0.0) and currently lock OpenIddict 7.7.2 (stable; dependency range `[7.7.2,8.0.0-0)`). They multi-target `netstandard2.0`, `netstandard2.1`, `net8.0`, `net9.0` and `net10.0`; no preview packages are referenced. Support for an OpenIddict 8.x line will be evaluated separately once an upstream stable release exists.
+Relational database stores for OpenIddict, for SQL Server, PostgreSQL, MySQL/MariaDB, SQLite, Oracle and DM (Dameng). The packages are versioned independently of upstream (starting at 1.0.0) and currently lock OpenIddict 7.7.2 (stable; dependency range `[7.7.2,8.0.0)`). They multi-target `netstandard2.0`, `netstandard2.1`, `net8.0`, `net9.0` and `net10.0`; no preview packages are referenced. Every dependency is declared as a bounded range, with the Microsoft.Extensions line selected per target framework (8.0.x for netstandard/net8, 9.0.x for net9, 10.0.x for net10). Support for an OpenIddict 8.x line will be evaluated separately once an upstream stable release exists.
 
 The [project design document](docs/design.md) is the authority for development, testing and acceptance. It covers compatible versions, package layout, public API, database model, querying, transactions, migrations, tests and samples; section 10 defines the source layout, versioning and upgrade chain, packaging and ongoing maintenance rules for the per-database SQL scripts.
 
@@ -47,7 +47,7 @@ pwsh ./scripts/verify.ps1
 
 Runs restore, a `--no-incremental` Release build for all target frameworks, the unit and integration tests (SQLite runs for real; nothing here needs a server), packing, and the package-content checks. Every step propagates its exit code, so a failure cannot be reported as a pass. Add `-SkipPack` to skip the packaging steps. The real-database acceptance harness is deliberately outside this gate and outside the solution.
 
-GitHub Actions (`.github/workflows/ci-cd.yml`) runs the same gate on branch pushes and pull requests — build and test only. A version tag (`v*.*.*`) additionally packs the eight packages, publishes them to NuGet and creates a GitHub release; the publish job needs a `NUGET_API_KEY` secret.
+GitHub Actions (`.github/workflows/ci-cd.yml`) runs the same gate on branch pushes and pull requests — build and test only. A version tag (`v*.*.*`) must match the version composed from `<VersionPrefix>` (plus `<VersionSuffix>` for a pre-release) in `Directory.Build.props` and point to HEAD; it publishes the eight packages accepted by the same build job and creates a GitHub release. Publishing uses NuGet Trusted Publishing (GitHub OIDC exchanged for a one-hour API key), so no `NUGET_API_KEY` secret is stored in the repository; the nuget.org policy is described in [.github/workflows/README.md](.github/workflows/README.md).
 
 ## Historical note
 

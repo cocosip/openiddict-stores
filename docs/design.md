@@ -59,10 +59,10 @@
 
 | 项目系列 | 建议分支 | NuGet 版本示意 | OpenIddict 依赖 | 发布类库目标 |
 | --- | --- | --- | --- | --- |
-| 当前系列（实施中） | `master`（如需发布分支用 `release/1.x`） | `1.0.0` | 锁定 7.7.2 稳定版；发布依赖范围 `[7.7.2,8.0.0-0)`，排除 8.x 及其预览版 | `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0` |
+| 当前系列（实施中） | `master`（如需发布分支用 `release/1.x`） | `1.0.0` | 锁定 7.7.2 稳定版；发布依赖范围 `[7.7.2,8.0.0)`，排除 8.x | `netstandard2.0;netstandard2.1;net8.0;net9.0;net10.0` |
 | 后续系列（暂不实施） | 待定 | 待定 | 需等 8.x 稳定版发布后再定；不锁定预览包 | 待定 |
 
-包版本由本项目自主编号，**不跟随上游 OpenIddict 的版本号**（2026-10-20 按用户决定，从此前"主版本表达 OpenIddict 兼容系列"的方案改为自主编号，见 development.md E-043）：首版 `1.0.0` 只表示本扩展自身的演进，与 OpenIddict 是 7 还是 8 无关。对上游的兼容范围由 NuGet 依赖范围表达——当前锁定 7.7.2，发布范围采用 `[7.7.2,8.0.0-0)`，不能用会允许 8.0 预览版进入的宽范围。数据库架构 Series 同样从本扩展自己的 `1` 开始（脚本目录 `Sql/1/`、`{prefix}SchemaVersions` 的种子记录 `Series='1'`），不沿用上游主版本。
+包版本由本项目自主编号，**不跟随上游 OpenIddict 的版本号**（2026-10-20 按用户决定，从此前"主版本表达 OpenIddict 兼容系列"的方案改为自主编号，见 development.md E-043）：首版 `1.0.0` 只表示本扩展自身的演进，与 OpenIddict 是 7 还是 8 无关。对上游的兼容范围由 NuGet 依赖范围表达——当前锁定 7.7.2，发布范围采用 `[7.7.2,8.0.0)`，不能用会允许 8.0 进入的宽范围。数据库架构 Series 同样从本扩展自己的 `1` 开始（脚本目录 `Sql/1/`、`{prefix}SchemaVersions` 的种子记录 `Series='1'`），不沿用上游主版本。
 
 8.x 主线暂不实施：上游尚无稳定版，本项目不引用预览包，因此不为其创建工程骨架、不锁定预览依赖，也不发布预览包。等 8.x 稳定版发布并核实存储合同后再单独启动。
 
@@ -140,23 +140,26 @@ docs/
 | net9.0 | 9.0.x | 与 OpenIddict 7.7.2 的 `net9.0` 依赖组一致 |
 | net10.0 | 10.0.x | 与 OpenIddict 7.7.2 的 `net10.0` 依赖组一致 |
 
-当前实际锁定的精确版本（全部稳定版）：
+当前实际使用的范围版本（中央清单中的下界即构建版本，全部稳定版）：
 
 | TFM | DependencyInjection.Abstractions | Logging.Abstractions | Options |
 | --- | --- | --- | --- |
-| netstandard2.0 / netstandard2.1 / net8.0 | 8.0.2 | 8.0.2 | 8.0.2 |
-| net9.0 | 9.0.21 | 9.0.21 | 9.0.21 |
-| net10.0 | 10.0.13 | 10.0.13 | 10.0.13 |
+| netstandard2.0 / netstandard2.1 / net8.0 | `[8.0.2,9.0.0)` | `[8.0.2,9.0.0)` | `[8.0.2,9.0.0)` |
+| net9.0 | `[9.0.21,10.0.0)` | `[9.0.21,10.0.0)` | `[9.0.21,10.0.0)` |
+| net10.0 | `[10.0.13,11.0.0)` | `[10.0.13,11.0.0)` | `[10.0.13,11.0.0)` |
 
-`System.Security.Cryptography.Pkcs` 作为传递依赖提升按同一分线锁定（8.0.1 / 9.0.21 / 10.0.13），用于消除上游传递引入的已知漏洞版本。
+`System.Security.Cryptography.Pkcs` 作为传递依赖提升按同一分线使用同一范围（`[8.0.2,9.0.0)` / `[9.0.21,10.0.0)` / `[10.0.13,11.0.0)`），用于消除上游传递引入的已知漏洞版本。
 
 规则：
 
 - 每个 TFM 选取该 TFM 上仍受支持的**最低版本线**，且不低于上游同 TFM 依赖组的下限；消费者可以自行解析到更高补丁，本扩展不替消费者锁定高主版本。
-- 8.x 主线只有 `net10.0`，其依赖统一使用 10.0.x；该行在 8.x 稳定版发布并实施后生效，当前不适用。- 在中央包管理中按 TFM 条件登记（`Directory.Packages.props` 中用 `Condition="'$(TargetFramework)' == 'net8.0'"` 的 `ItemGroup` 分别声明），不允许改用工程级 `Version`、`VersionOverride` 或运行时程序集绑定绕过。
+- 发布依赖使用**范围版本**而不是精确版本：`Directory.Packages.props` 的 `PackageVersion` 写 `[下界,下一主版本)`，打包后 nuspec 依赖组保留该范围，消费者可在同一主版本内获取服务更新；中央包管理仍按下界还原，构建结果可复现。
+- 微软系列包的分线版本集中在一个 MSBuild 属性（`MicrosoftVersionRange`）中，按 TFM 覆盖一次，所有 `Microsoft.Extensions.*` 与 `System.Security.Cryptography.Pkcs` 共用该属性，避免逐包登记版本。
+- 8.x 主线只有 `net10.0`，其依赖统一使用 10.0.x；该行在 8.x 稳定版发布并实施后生效，当前不适用。
+- 按 TFM 覆盖只允许在 `Directory.Packages.props` 中用 `Condition="'$(TargetFramework)' == 'net8.0'"` 的 `PropertyGroup` 完成，不允许改用工程级 `Version`、`VersionOverride` 或运行时程序集绑定绕过。
 - 单一版本即可覆盖全部 TFM 的依赖不必拆分；只有存在按代际发布的依赖（Microsoft.Extensions.*、缓存、日志、选项等）才按 TFM 分线。
-- 打包后检查 nuspec 依赖组：`netstandard2.0`/`netstandard2.1`/`net8.0` 组不得出现 9.x/10.x 的 Microsoft.Extensions.*，`net9.0` 组不得出现 10.x；主线 `net10.0` 组不得出现低代际依赖。7.7.2 基线已实测通过：`Sharp.OpenIddict.Stores` 的 nuspec 五个依赖组分别为 8.0.2 / 8.0.2 / 8.0.2 / 9.0.21 / 10.0.13，OpenIddict 依赖统一为 7.7.2（该实测在包版本改为自主编号前完成，依赖组与包版本无关）。
-- 只在全局组登记 `Microsoft.Extensions.DependencyInjection` 这类会向下拉取更高代际的包，会把 10.0.x 注入低 TFM 并触发 NU1109 降级错误；因此这类提升必须收进对应 TFM 的条件组，或直接不提升，让上游解析结果保留。
+- 打包后检查 nuspec 依赖组：`netstandard2.0`/`netstandard2.1`/`net8.0` 组不得出现 9.x/10.x 的 Microsoft.Extensions.*，`net9.0` 组不得出现 10.x；主线 `net10.0` 组不得出现低代际依赖。7.7.2 基线已实测通过：`Sharp.OpenIddict.Stores` 的 nuspec 五个依赖组分别为 `[8.0.2,9.0.0)` / `[8.0.2,9.0.0)` / `[8.0.2,9.0.0)` / `[9.0.21,10.0.0)` / `[10.0.13,11.0.0)`，OpenIddict 依赖统一为 `[7.7.2,8.0.0)`。
+- 只在全局组登记 `Microsoft.Extensions.DependencyInjection` 这类会向下拉取更高代际的包，会把 10.0.x 注入低 TFM 并触发 NU1109 降级错误；因此这类提升必须收进对应 TFM 的条件线，或直接不提升，让上游解析结果保留。
 - 数据库驱动只被测试、示例引用时同样受宿主 TFM 限制：驱动缺少某 TFM 资产（例如 Oracle 驱动只有 `net8.0`/`netstandard2.1`）时，在该 TFM 上不可用，必须在支持矩阵和使用说明中标注，不得用版本提升假装支持。
 - 测试、示例和可运行工具固定 `net10.0`，统一引用 10.0.x；它们引用多目标类库时由 NuGet 选择 `net10.0` 资产，这条不构成“已在 net8/net9 原生运行”的证据。
 
@@ -711,7 +714,7 @@ CI 分三个阶段：
 
 普通 PR 可在缺少部分外部数据库时给出明确缺口，但不能获得“六数据库已验证”的发布结论。
 
-触发规则（`.github/workflows/ci-cd.yml`）：分支（main/master）push 与 PR **只执行第 1 阶段门禁**——构建与测试，不装任何数据库服务端；只有 `v*.*.*` 形式的 tag 才触发打包与发布作业：以 tag 版本覆盖 `Version` 打包（`ContinuousIntegrationBuild=true`），校验恰好八个包后推送 nuget.org（凭据来自 `NUGET_API_KEY` secret，`--skip-duplicate`，不吞推送错误），并创建附带全部包的 GitHub Release。tag 一旦存在即代表“该版本已通过第 1 阶段门禁”；第 2 阶段的真库证据仍按第 5 节矩阵单独记录，不因打 tag 自动视为通过。
+触发规则（`.github/workflows/ci-cd.yml`）：分支（main/master）push 与 PR **只执行第 1 阶段门禁**——构建与测试，不装任何数据库服务端；只有 `v*.*.*` 形式的 tag 才触发发布链路。版本唯一来源是 `Directory.Build.props` 的 `<VersionPrefix>`（预发布版本另加 `<VersionSuffix>`）：tag 必须等于 `v<VersionPrefix>[-<VersionSuffix>]` 且指向 HEAD，否则在编译前失败。构建作业只编译一次并打包，包资产测试直接检查这批 nupkg，随后把包与发布说明作为 artifact 上传；发布作业不 checkout、不还原、不编译，只下载该 artifact 并通过 NuGet Trusted Publishing（GitHub OIDC 换取 1 小时临时 API Key，`NuGet/login@v1`）推送到 nuget.org（`--skip-duplicate`，不吞推送错误），再用 `gh release create --verify-tag` 创建附带全部包的 GitHub Release。仓库不再保存长期 `NUGET_API_KEY` secret。tag 一旦存在即代表“该版本已通过第 1 阶段门禁”；第 2 阶段的真库证据仍按第 5 节矩阵单独记录，不因打 tag 自动视为通过。
 
 测试进程虽统一 net10，针对 netstandard2.0/2.1 编译资产仍应有独立加载/调用验证，覆盖低 TFM 的读取、释放与异步接口路径。该验证说明“此资产在 net10 宿主下运行”，不能改写成已验证所有旧宿主。
 

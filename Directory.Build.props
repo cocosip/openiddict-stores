@@ -11,6 +11,9 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
     <Deterministic>true</Deterministic>
     <DebugType>embedded</DebugType>
+    <!-- CI builds and packs once, then publishes that artifact, so the CI normalization must happen at
+         build time rather than only on the pack command. -->
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <!-- Only src/ projects are packable; tests and samples must never enter a package. -->
     <IsPackable>false</IsPackable>
   </PropertyGroup>
